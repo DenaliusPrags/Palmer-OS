@@ -20,15 +20,19 @@ body{background:#0A0F1E;color:#F0EBE0;font-family:Inter,system-ui,sans-serif;ove
 input,select,textarea{color:#F0EBE0;font-family:Inter,system-ui,sans-serif}
 select option{background:#1C2640}
 input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.8)}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2px;background:rgba(240,235,224,0.07);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#C9A84C;cursor:pointer}
 ::-webkit-scrollbar{display:none}
 @keyframes pulse{0%,80%,100%{opacity:.3}40%{opacity:1}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes ringAnim{from{stroke-dashoffset:283}to{stroke-dashoffset:var(--target)}}
+@keyframes timerPulse{0%,100%{opacity:1}50%{opacity:0.6}}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script>
-const{useState,useEffect,useCallback,useRef}=React;
+const{useState,useEffect,useCallback,useRef,useMemo}=React;
 
 const C={
   navy:"#0A0F1E",midnight:"#111827",card:"#161D2E",card2:"#1C2640",
@@ -52,7 +56,46 @@ const LEVELS=[
   {level:10,title:"The Raven",xpNeeded:5500,icon:"🦅"},
 ];
 
-const XPR={task:10,goal:50,checkin:15,writing:25};
+const DAILY_QUOTES=[
+  "The man who finishes this plan will not recognize the man who started it.",
+  "One rotation at a time. One month at a time. One session at a time.",
+  "The book gets written in the margins of a life, not in ideal conditions.",
+  "A man who neglects his own inner development has nothing real to bring to anyone.",
+  "Brahmacharya redirected is creative, mental, and spiritual fuel.",
+  "The right teacher appears when the student is genuinely ready.",
+  "Saturn demands patience. Saturn rewards discipline.",
+  "Write it. The world is built. Now it needs to be inhabited.",
+  "Shore-based roles go to the visible. Be visible.",
+  "Every day on the path is a day compounding toward the life.",
+  "The inner curriculum is the foundation everything else stands on.",
+  "Ayahuasca is not a drug experience. It is surgery on the mind.",
+  "Your 60-year-old self is watching. Act accordingly.",
+  "The Raven is patient. The Raven is precise. The Raven arrives.",
+];
+
+const DASHA_INFO={
+  name:"Saturn Mahadasha",
+  start:"2020",end:"2034-2035",
+  current:"Saturn–Rahu Antardasha",
+  theme:"Discipline, structure, delayed reward, karmic reckoning. Saturn in this chart demands sustained effort over shortcuts. The rewards come — but only after the work is real.",
+  guidance:"This period tests commitment. Career restructuring, long-distance pressures, and financial patience are Saturn's curriculum. The offshore life, the LMA diploma, the long-distance marriage — all Saturn themes. Navigate with discipline and faith in the timeline.",
+  color:C.purpleLight
+};
+
+const IMMIGRATION=[
+  {id:"i1",label:"I-130 F2A — Theresa",status:"received",priority:"active",detail:"Receipt IOE9821080292. F2A Final Action Date reached Jan 2025. Priority date Aug 21 2025 — approx 8 months behind. No movement Jul 2026 bulletin.",next:"Monitor monthly bulletin. Initiate congressional inquiry to Rep. Maxwell Frost FL-10.",date:"2025-08-21",color:C.tealLight},
+  {id:"i2",label:"Theresa Naturalization",status:"future",priority:"strategic",detail:"Eligible approx May 2028. Upgrades Garry to Immediate Relative status — bypasses F2A backlog entirely.",next:"Track 5-year continuous residence. Ensure no trips over 6 months.",date:"2028-05-01",color:C.greenLight},
+  {id:"i3",label:"F3 — Coleen Abrams",status:"nvc",priority:"pending",detail:"Priority date March 2013. NVC case GEO2020677013 already at Georgetown post. Petitioner circumstances require urgent action when Dates for Filing window opens.",next:"Watch monthly bulletin for F3 Dates for Filing. File NVC documents immediately when window opens.",date:"2013-03-01",color:C.gold},
+  {id:"i4",label:"Sister — Independent Pathway",status:"planning",priority:"low",detail:"CSPA-adjusted age likely above 21. F-1 to OPT to H-1B or Canada Express Entry more viable than dependent petition.",next:"Advise sister to explore F-1 or Canada Express Entry profile creation.",date:null,color:C.whiteDim},
+];
+
+const CONTACTS=[
+  {id:"c1",name:"Shonette Paddy",role:"Recruiter — El Dorado Offshore / Noble",notes:"Declined Beacon Manager role on financial grounds. Relationship preserved. Keep warm.",lastContact:"2026-06",followUp:"2026-09",status:"warm",color:C.gold},
+];
+
+const BOOKS=[
+  {id:"b1",title:"LMA Ship Management Diploma",author:"Lloyd's Maritime Academy",status:"reading",progress:15,notes:"Module 1: TCE, breakeven analysis, fixed vs variable costs. May 2026 intake."},
+];
 
 const CATS=[
   {id:"inner",label:"Inner",icon:"🔮",color:C.tealLight},
@@ -73,132 +116,64 @@ const STYPES=[
   {id:"custom",label:"Custom",color:C.purpleLight,icon:"🌊"},
 ];
 
-// ── OFFSHORE DAILY RHYTHM (Deep Water seasons) ──
 const OFFSHORE_DAILY=[
-  {id:"od1",title:"Morning Journal Entry",category:"inner",status:"pending",priority:"high",
-   notes:"Raw thought. No structure needed. 10-15 minutes before watch or after breakfast.",
-   tasks:[{id:"ot1",text:"Open journal and write",done:false},{id:"ot2",text:"At least one full page",done:false}]},
-  {id:"od2",title:"AMORC Study Session",category:"spirit",status:"pending",priority:"high",
-   notes:"3x per week minimum. 30-45 minutes. Consistent progression through degree materials.",
-   tasks:[{id:"ot3",text:"Read assigned monograph",done:false},{id:"ot4",text:"Do the exercises",done:false},{id:"ot5",text:"Note any insights",done:false}]},
-  {id:"od3",title:"Weekly Book Writing Session",category:"book",status:"pending",priority:"high",
-   notes:"Once per week offshore. No word count target. Open the document, stay in the world, write what comes. Even 200 words keeps the connection alive.",
-   tasks:[{id:"ot6",text:"Open Ravenborn Chronicles document",done:false},{id:"ot7",text:"Write for at least 30 minutes",done:false},{id:"ot8",text:"Note where you left off",done:false}]},
-  {id:"od4",title:"Brahmacharya Practice",category:"spirit",status:"pending",priority:"high",
-   notes:"Track daily. Redirect energy into the inner work and the book. This is the 90 day commitment.",
-   tasks:[{id:"ot9",text:"Mark today on tracker",done:false}]},
-  {id:"od5",title:"Physical Training",category:"health",status:"pending",priority:"medium",
-   notes:"Calisthenics and weight work. Whatever is available on vessel. Consistency over intensity.",
-   tasks:[{id:"ot10",text:"Complete training session",done:false},{id:"ot11",text:"Note exercises done",done:false}]},
-  {id:"od6",title:"LMA Diploma Study",category:"career",status:"pending",priority:"high",
-   notes:"Lloyd's Maritime Academy Diploma in Ship Management. Module progression. 45-60 minutes per session when possible offshore.",
-   tasks:[{id:"ot12",text:"Review current module",done:false},{id:"ot13",text:"Complete assigned readings",done:false}]},
+  {id:"od1",title:"Morning Journal",category:"inner",priority:"high",notes:"10-15 min. Raw thought, no structure. Feeds everything.",tasks:[{id:"ot1",text:"Write at least one page",done:false}]},
+  {id:"od2",title:"AMORC Study",category:"spirit",priority:"high",notes:"3x per week min. 30-45 min. Progress through degree materials.",tasks:[{id:"ot3",text:"Read monograph",done:false},{id:"ot4",text:"Complete exercises",done:false}]},
+  {id:"od3",title:"Weekly Book Session",category:"book",priority:"high",notes:"Once per week. No word target. Open the document, stay in the world.",tasks:[{id:"ot6",text:"Write for 30+ minutes",done:false},{id:"ot7",text:"Note where you left off",done:false}]},
+  {id:"od4",title:"Brahmacharya — Track",category:"spirit",priority:"high",notes:"Mark today. Redirect energy into inner work and book.",tasks:[{id:"ot9",text:"Mark day on tracker",done:false}]},
+  {id:"od5",title:"Physical Training",category:"health",priority:"medium",notes:"Whatever vessel allows. Consistency over intensity.",tasks:[{id:"ot10",text:"Complete session",done:false}]},
+  {id:"od6",title:"LMA Study",category:"career",priority:"high",notes:"45-60 min when possible. Module progression.",tasks:[{id:"ot12",text:"Review module material",done:false}]},
 ];
 
-// ── HOME DAILY RHYTHM (Shore Leave seasons) ──
 const HOME_DAILY=[
-  {id:"hd1",title:"Morning Journal + Intention Setting",category:"inner",status:"pending",priority:"high",
-   notes:"First thing. Set the tone for the day. What matters today? What are you moving toward? 20-30 minutes.",
-   tasks:[{id:"ht1",text:"Morning pages written",done:false},{id:"ht2",text:"Daily intention set",done:false}]},
-  {id:"hd2",title:"AMORC Study — Daily",category:"spirit",status:"pending",priority:"high",
-   notes:"Every day home. You have the time. This is the path. 45-60 minutes.",
-   tasks:[{id:"ht3",text:"Monograph reading",done:false},{id:"ht4",text:"Exercises completed",done:false},{id:"ht5",text:"Meditation practice",done:false}]},
-  {id:"hd3",title:"Book Writing Session",category:"book",status:"pending",priority:"critical",
-   notes:"3x per week home. 2-3 hours per session. This is the core creative work. Target 1000-1500 words when flowing. Some sessions will be planning or rereading — that counts too.",
-   tasks:[{id:"ht6",text:"2-3 hour writing block",done:false},{id:"ht7",text:"Log word count",done:false},{id:"ht8",text:"Note next scene",done:false}]},
-  {id:"hd4",title:"Physical Training — Daily",category:"health",status:"pending",priority:"medium",
-   notes:"Home is where consistency compounds. Calisthenics, weights, whatever your setup allows. Every day.",
-   tasks:[{id:"ht9",text:"Training session complete",done:false}]},
-  {id:"hd5",title:"Evening Reflection",category:"inner",status:"pending",priority:"medium",
-   notes:"End of day. Brief journal. What happened? What moved? What do you carry forward?",
-   tasks:[{id:"ht10",text:"Evening journal entry",done:false}]},
-  {id:"hd6",title:"Season Goal — Active Work",category:"goals",status:"pending",priority:"high",
-   notes:"Dedicate focused time to the current season goal. This is the one thing getting built this rotation.",
-   tasks:[{id:"ht11",text:"Work on active season goal",done:false},{id:"ht12",text:"Log progress",done:false}]},
+  {id:"hd1",title:"Morning Journal + Intention",category:"inner",priority:"high",notes:"First thing. What matters today? 20-30 min.",tasks:[{id:"ht1",text:"Morning pages",done:false},{id:"ht2",text:"Set daily intention",done:false}]},
+  {id:"hd2",title:"AMORC Study — Daily",category:"spirit",priority:"high",notes:"Every day home. 45-60 min. This is the path.",tasks:[{id:"ht3",text:"Monograph reading",done:false},{id:"ht4",text:"Meditation practice",done:false}]},
+  {id:"hd3",title:"Book Writing Session",category:"book",priority:"critical",notes:"3x per week. 2-3 hours. 1000-1500 words when flowing.",tasks:[{id:"ht6",text:"2-3 hour writing block",done:false},{id:"ht7",text:"Log word count",done:false}]},
+  {id:"hd4",title:"Physical Training",category:"health",priority:"medium",notes:"Daily. Calisthenics and weights.",tasks:[{id:"ht9",text:"Training complete",done:false}]},
+  {id:"hd5",title:"Evening Reflection",category:"inner",priority:"medium",notes:"Brief journal. What happened? What moved?",tasks:[{id:"ht10",text:"Evening journal entry",done:false}]},
+  {id:"hd6",title:"Season Goal Work",category:"goals",priority:"high",notes:"Focused time on the active season goal.",tasks:[{id:"ht11",text:"Work on season goal",done:false},{id:"ht12",text:"Log progress",done:false}]},
 ];
 
 const DS=[
-  {id:"s1",name:"Deep Water I",type:"on",start:"2026-06-19",end:"2026-07-17",notes:"Current rotation. Keep the connection alive offshore.",goals:[...OFFSHORE_DAILY]},
-  {id:"s2",name:"Shore Leave I",type:"off",start:"2026-07-17",end:"2026-08-14",notes:"First major inner work window. This is where it all begins.",goals:[
-    ...HOME_DAILY,
-    {id:"g1",title:"Leather Journal + Daily Practice",category:"inner",status:"pending",priority:"high",
-     notes:"Buy quality journal. Raw daily thought. No structure. This feeds the book and everything else.",
-     tasks:[{id:"t1",text:"Buy leather journal",done:false},{id:"t2",text:"Write first entry",done:false},{id:"t3",text:"7 consecutive days journaled",done:false}]},
-    {id:"g2",title:"Rejoin AMORC",category:"spirit",status:"pending",priority:"high",
-     notes:"Reinstate membership. 5th-6th degree. Go all the way this time. This is a path not a task.",
-     tasks:[{id:"t4",text:"Visit amorc.org and reinstate",done:false},{id:"t5",text:"Request degree materials",done:false},{id:"t6",text:"Establish daily study schedule",done:false}]},
-    {id:"g3",title:"The Two Letters",category:"inner",status:"pending",priority:"critical",
-     notes:"Write to your 60yr self. Then write back from him. Seal both. Do not reread for 90 days. This is the foundation. Do it first.",
-     tasks:[{id:"t7",text:"Write letter TO 60yr self",done:false},{id:"t8",text:"Write letter FROM 60yr self",done:false},{id:"t9",text:"Seal and date both",done:false}]},
-    {id:"g4",title:"Brahmacharya — Begin 90 Days",category:"spirit",status:"pending",priority:"high",
-     notes:"Redirect energy into the book and inner work. Starts Shore Leave I. Track every day.",
-     tasks:[{id:"t10",text:"Commit formally",done:false},{id:"t11",text:"Set up daily tracking",done:false},{id:"t12",text:"30 days complete",done:false},{id:"t13",text:"60 days complete",done:false},{id:"t14",text:"90 days complete",done:false}]},
-    {id:"g5",title:"The Father Reckoning",category:"inner",status:"pending",priority:"high",
-     notes:"One dedicated session. Alone. Full honesty about what was modeled, what was missing, what you repeat or overcorrect for. Write it in the journal.",
-     tasks:[{id:"t15",text:"Dedicated solo session",done:false},{id:"t16",text:"Written in journal",done:false}]},
-    {id:"g6",title:"Name the Thing You Fear to Want",category:"inner",status:"pending",priority:"high",
-     notes:"The desire so large you have never fully admitted it. Write it in one journal entry. No audience. Sit with what it means to pursue it.",
-     tasks:[{id:"t17",text:"Written honestly in journal",done:false},{id:"t18",text:"Sat with for 3 days",done:false}]},
+  {id:"s1",name:"Deep Water I",type:"on",start:"2026-06-19",end:"2026-07-17",notes:"Current rotation. Keep the connection alive.",goals:[...OFFSHORE_DAILY]},
+  {id:"s2",name:"Shore Leave I",type:"off",start:"2026-07-17",end:"2026-08-14",notes:"First major inner work window. This is where it all begins.",goals:[...HOME_DAILY,
+    {id:"g1",title:"Leather Journal + Daily Practice",category:"inner",status:"pending",priority:"high",notes:"Buy quality journal. Raw daily thought.",tasks:[{id:"t1",text:"Buy leather journal",done:false},{id:"t2",text:"Write first entry",done:false},{id:"t3",text:"7 consecutive days journaled",done:false}]},
+    {id:"g2",title:"Rejoin AMORC",category:"spirit",status:"pending",priority:"high",notes:"Reinstate at 5th-6th degree. Go all the way.",tasks:[{id:"t4",text:"Visit amorc.org and reinstate",done:false},{id:"t5",text:"Request degree materials",done:false},{id:"t6",text:"Establish daily study schedule",done:false}]},
+    {id:"g3",title:"The Two Letters",category:"inner",status:"pending",priority:"critical",notes:"To your 60yr self. From your 60yr self. Seal both. Foundation of everything.",tasks:[{id:"t7",text:"Write letter TO 60yr self",done:false},{id:"t8",text:"Write letter FROM 60yr self",done:false},{id:"t9",text:"Seal and date both",done:false}]},
+    {id:"g4",title:"Brahmacharya — Begin 90 Days",category:"spirit",status:"pending",priority:"high",notes:"Redirect energy into the book and inner work.",tasks:[{id:"t10",text:"Commit formally",done:false},{id:"t11",text:"30 days complete",done:false},{id:"t12",text:"60 days complete",done:false},{id:"t13",text:"90 days complete",done:false}]},
+    {id:"g5",title:"The Father Reckoning",category:"inner",status:"pending",priority:"high",notes:"One dedicated session. Alone. Full honesty. Write it.",tasks:[{id:"t14",text:"Dedicated solo session",done:false},{id:"t15",text:"Written in journal",done:false}]},
+    {id:"g6",title:"Name the Thing You Fear to Want",category:"inner",status:"pending",priority:"high",notes:"The desire so large you've never admitted it. Write it.",tasks:[{id:"t16",text:"Written honestly in journal",done:false},{id:"t17",text:"Sat with for 3 days",done:false}]},
   ]},
-  {id:"s3",name:"Deep Water II",type:"on",start:"2026-08-14",end:"2026-09-11",notes:"Offshore momentum. AMORC deepens. Book stays alive.",goals:[
-    ...OFFSHORE_DAILY,
-    {id:"s3g1",title:"LMA Diploma — Module Progression",category:"career",status:"pending",priority:"high",
-     notes:"Keep advancing through Ship Management modules. Offshore is good study time.",
-     tasks:[{id:"s3t1",text:"Complete current module",done:false},{id:"s3t2",text:"Submit any assignments",done:false}]},
+  {id:"s3",name:"Deep Water II",type:"on",start:"2026-08-14",end:"2026-09-11",notes:"Offshore momentum. AMORC deepens. Book stays alive.",goals:[...OFFSHORE_DAILY,
+    {id:"s3g1",title:"LMA Module Progression",category:"career",status:"pending",priority:"high",notes:"Keep advancing. Offshore is good study time.",tasks:[{id:"s3t1",text:"Complete current module",done:false},{id:"s3t2",text:"Submit any assignments",done:false}]},
   ]},
-  {id:"s4",name:"Shore Leave II",type:"off",start:"2026-09-11",end:"2026-10-09",notes:"Build season. First external things go live.",goals:[
-    ...HOME_DAILY,
-    {id:"s4g1",title:"Maritime Consultancy Setup",category:"career",status:"pending",priority:"high",
-     notes:"Domain, one-page website, business registration. You have the credentials. Package them.",
-     tasks:[{id:"s4t1",text:"Choose business name",done:false},{id:"s4t2",text:"Register domain",done:false},{id:"s4t3",text:"Build one-page site",done:false},{id:"s4t4",text:"List services and rates",done:false}]},
-    {id:"s4g2",title:"Chapter 1 — First Draft Complete",category:"book",status:"pending",priority:"critical",
-     notes:"MC age 11. Lower realm. Ancient Spirit tells a fairytale at night. Truth wrapped in story. This is the first prose of the Ravenborn Chronicles.",
-     tasks:[{id:"s4t5",text:"Outline opening scene",done:false},{id:"s4t6",text:"Write Chapter 1 full draft",done:false},{id:"s4t7",text:"Read back and revise once",done:false}]},
-    {id:"s4g3",title:"Ayahuasca — Research Facilitators",category:"spirit",status:"pending",priority:"medium",
-     notes:"Vetted facilitators Colombia or Brazil. Budget under $1000 all in. Preparation matters more than timing. Do not rush.",
-     tasks:[{id:"s4t8",text:"Research 3 vetted facilitators",done:false},{id:"s4t9",text:"Read preparation requirements",done:false},{id:"s4t10",text:"Choose window (Nov or Jan)",done:false}]},
+  {id:"s4",name:"Shore Leave II",type:"off",start:"2026-09-11",end:"2026-10-09",notes:"Build season. First external things go live.",goals:[...HOME_DAILY,
+    {id:"s4g1",title:"Maritime Consultancy Setup",category:"career",status:"pending",priority:"high",notes:"Domain, one-page site, business registration.",tasks:[{id:"s4t1",text:"Choose business name",done:false},{id:"s4t2",text:"Register domain",done:false},{id:"s4t3",text:"Build one-page site",done:false},{id:"s4t4",text:"List services and rates",done:false}]},
+    {id:"s4g2",title:"Chapter 1 — First Draft",category:"book",status:"pending",priority:"critical",notes:"MC age 11. Lower realm. Ancient Spirit tells a fairytale. This is the first prose.",tasks:[{id:"s4t5",text:"Outline opening scene",done:false},{id:"s4t6",text:"Write Chapter 1 draft",done:false},{id:"s4t7",text:"Read back and revise",done:false}]},
+    {id:"s4g3",title:"Ayahuasca — Research Facilitators",category:"spirit",status:"pending",priority:"medium",notes:"Colombia or Brazil. Under $1000 all in. Do not rush.",tasks:[{id:"s4t8",text:"Research 3 vetted facilitators",done:false},{id:"s4t9",text:"Read preparation requirements",done:false},{id:"s4t10",text:"Choose timing window",done:false}]},
   ]},
-  {id:"s5",name:"Deep Water III",type:"on",start:"2026-10-09",end:"2026-11-06",notes:"Deepening. The path is established now. Maintain and advance.",goals:[
-    ...OFFSHORE_DAILY,
-    {id:"s5g1",title:"Language Prep — Choose and Begin",category:"goals",status:"pending",priority:"medium",
-     notes:"Mandarin or Spanish. Make the choice this rotation. Download iTalki. Identify tutors. 20 minutes daily even offshore.",
-     tasks:[{id:"s5t1",text:"Choose language definitively",done:false},{id:"s5t2",text:"Download iTalki",done:false},{id:"s5t3",text:"Book first tutor session for home",done:false}]},
+  {id:"s5",name:"Deep Water III",type:"on",start:"2026-10-09",end:"2026-11-06",notes:"Deepening. The path is established. Maintain and advance.",goals:[...OFFSHORE_DAILY,
+    {id:"s5g1",title:"Language Prep — Choose and Begin",category:"goals",status:"pending",priority:"medium",notes:"Mandarin or Spanish. Make the choice. 20 min daily.",tasks:[{id:"s5t1",text:"Choose language",done:false},{id:"s5t2",text:"Download iTalki",done:false},{id:"s5t3",text:"Book first tutor session",done:false}]},
   ]},
-  {id:"s6",name:"Shore Leave III",type:"off",start:"2026-11-06",end:"2026-12-04",notes:"Voice season. Start being heard.",goals:[
-    ...HOME_DAILY,
-    {id:"s6g1",title:"Podcast + Recording Setup",category:"goals",status:"pending",priority:"medium",
-     notes:"USB condenser microphone (ATR2100x or similar), Audacity free, basic acoustic treatment. Record first episode even if never published. The practice matters.",
-     tasks:[{id:"s6t1",text:"Research and buy microphone",done:false},{id:"s6t2",text:"Set up Audacity",done:false},{id:"s6t3",text:"Record first episode",done:false},{id:"s6t4",text:"Listen back and assess",done:false}]},
-    {id:"s6g2",title:"Act I Outline — Complete",category:"book",status:"pending",priority:"high",
-     notes:"Full scene-by-scene outline of Act I. The attack, the flight, growing up in lower realm. Know exactly where you are going before writing it.",
-     tasks:[{id:"s6t5",text:"Scene list for Act I",done:false},{id:"s6t6",text:"Character beats mapped",done:false},{id:"s6t7",text:"Key revelations timed",done:false}]},
-    {id:"s6g3",title:"LinkedIn Personal Brand — Build",category:"career",status:"pending",priority:"high",
-     notes:"Chief Mate, DPO, LMA Diploma, maritime educator. Most people with your credentials are invisible online. Change that.",
-     tasks:[{id:"s6t8",text:"Professional headshots",done:false},{id:"s6t9",text:"Rewrite LinkedIn profile",done:false},{id:"s6t10",text:"First 3 posts published",done:false}]},
+  {id:"s6",name:"Shore Leave III",type:"off",start:"2026-11-06",end:"2026-12-04",notes:"Voice season. Start being heard.",goals:[...HOME_DAILY,
+    {id:"s6g1",title:"Podcast + Recording Setup",category:"goals",status:"pending",priority:"medium",notes:"Microphone, Audacity, first episode recorded.",tasks:[{id:"s6t1",text:"Buy microphone",done:false},{id:"s6t2",text:"Set up Audacity",done:false},{id:"s6t3",text:"Record first episode",done:false}]},
+    {id:"s6g2",title:"Act I Outline Complete",category:"book",status:"pending",priority:"high",notes:"Full scene-by-scene outline. Know exactly where you are going.",tasks:[{id:"s6t4",text:"Scene list for Act I",done:false},{id:"s6t5",text:"Character beats mapped",done:false}]},
+    {id:"s6g3",title:"LinkedIn Personal Brand",category:"career",status:"pending",priority:"high",notes:"Chief Mate, DPO, LMA, educator. Be visible.",tasks:[{id:"s6t6",text:"Professional headshots",done:false},{id:"s6t7",text:"Rewrite LinkedIn profile",done:false},{id:"s6t8",text:"First 3 posts published",done:false}]},
   ]},
-  {id:"s7",name:"Deep Water IV",type:"on",start:"2026-12-04",end:"2027-01-01",notes:"Year end. Reflect and set intentions for 2027.",goals:[
-    ...OFFSHORE_DAILY,
-    {id:"s7g1",title:"2026 Year Review",category:"inner",status:"pending",priority:"high",
-     notes:"Full honest review in the journal. What was built? What was neglected? What does 2027 need to be?",
-     tasks:[{id:"s7t1",text:"Write full year review",done:false},{id:"s7t2",text:"Update master plan",done:false},{id:"s7t3",text:"Set 2027 season intentions",done:false}]},
+  {id:"s7",name:"Deep Water IV",type:"on",start:"2026-12-04",end:"2027-01-01",notes:"Year end. Reflect. Set intentions for 2027.",goals:[...OFFSHORE_DAILY,
+    {id:"s7g1",title:"2026 Year Review",category:"inner",status:"pending",priority:"high",notes:"Full honest review in journal. What was built? What was neglected?",tasks:[{id:"s7t1",text:"Write full year review",done:false},{id:"s7t2",text:"Update master plan",done:false}]},
   ]},
-  {id:"s8",name:"Shore Leave IV",type:"off",start:"2027-01-01",end:"2027-01-29",notes:"Language begins. New year momentum.",goals:[
-    ...HOME_DAILY,
-    {id:"s8g1",title:"Language via iTalki — Begin",category:"goals",status:"pending",priority:"medium",
-     notes:"3 sessions per week for the full rotation. This is the long game. Start it.",
-     tasks:[{id:"s8t1",text:"Book 3 sessions per week",done:false},{id:"s8t2",text:"Daily 20 min practice",done:false},{id:"s8t3",text:"Complete full rotation",done:false}]},
-    {id:"s8g2",title:"ISM Internal Auditor Course — Enroll",category:"career",status:"pending",priority:"high",
-     notes:"Directly feeds DPA and Internal Auditor goal from LMA diploma. Credential that makes you employable ashore before diploma finishes.",
-     tasks:[{id:"s8t2b",text:"Research course providers",done:false},{id:"s8t3b",text:"Enroll and begin",done:false}]},
-    {id:"s8g3",title:"Video Editing Course — Begin",category:"goals",status:"pending",priority:"medium",
-     notes:"Feeds the podcast, maritime content, 3D print marketing, and consultancy. One skill that multiplies everything.",
-     tasks:[{id:"s8t4",text:"Choose course (Premiere or DaVinci)",done:false},{id:"s8t5",text:"Complete first 3 modules",done:false}]},
+  {id:"s8",name:"Shore Leave IV",type:"off",start:"2027-01-01",end:"2027-01-29",notes:"Language begins. New year momentum.",goals:[...HOME_DAILY,
+    {id:"s8g1",title:"Language via iTalki",category:"goals",status:"pending",priority:"medium",notes:"3 sessions per week. Long game. Start it.",tasks:[{id:"s8t1",text:"Book 3 sessions per week",done:false},{id:"s8t2",text:"Daily 20 min practice",done:false}]},
+    {id:"s8g2",title:"ISM Internal Auditor — Enroll",category:"career",status:"pending",priority:"high",notes:"Feeds DPA and auditor goal. Employable ashore before diploma finishes.",tasks:[{id:"s8t3",text:"Research providers",done:false},{id:"s8t4",text:"Enroll and begin",done:false}]},
+    {id:"s8g3",title:"Video Editing Course",category:"goals",status:"pending",priority:"medium",notes:"Feeds podcast, content, consultancy. One skill multiplies everything.",tasks:[{id:"s8t5",text:"Choose course",done:false},{id:"s8t6",text:"Complete first 3 modules",done:false}]},
   ]},
 ];
 
-// ── helpers ──
+// helpers
 const td=()=>new Date().toISOString().slice(0,10);
 const fmt=d=>new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+const fmtShort=d=>new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
 const dleft=e=>Math.max(0,Math.ceil((new Date(e+"T23:59:59")-new Date())/86400000));
 const dsince=s=>Math.max(0,Math.floor((new Date()-new Date(s+"T00:00:00"))/86400000));
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -209,6 +184,7 @@ const gst=id=>STYPES.find(t=>t.id===id)||STYPES[STYPES.length-1];
 const glv=xp=>{let l=LEVELS[0];for(const x of LEVELS){if(xp>=x.xpNeeded)l=x;}return l;};
 const gnl=xp=>LEVELS.find(l=>l.xpNeeded>xp)||LEVELS[LEVELS.length-1];
 const glp=xp=>{const c=glv(xp),n=gnl(xp);if(c.level===n.level)return 100;return Math.round((xp-c.xpNeeded)/(n.xpNeeded-c.xpNeeded)*100);};
+const getDailyQuote=()=>DAILY_QUOTES[Math.floor(new Date().getDate()%DAILY_QUOTES.length)];
 
 function useStore(key,init){
   const[v,sv]=useState(()=>{try{const s=localStorage.getItem(key);return s?JSON.parse(s):init;}catch{return init;}});
@@ -216,19 +192,19 @@ function useStore(key,init){
   return[v,set];
 }
 
-// ── styles ──
+// styles
 const st=(v="gold")=>{
-  const m={gold:{bg:C.gold,fg:C.navy,b:"none"},outline:{bg:C.whiteFaint,fg:C.white,b:`1px solid ${C.borderFaint}`},teal:{bg:C.teal+"44",fg:C.tealLight,b:`1px solid ${C.teal}`},danger:{bg:C.crimson+"33",fg:C.crimsonLight,b:`1px solid ${C.crimson}55`},purple:{bg:C.purple+"44",fg:C.purpleLight,b:`1px solid ${C.purple}`}};
+  const m={gold:{bg:C.gold,fg:C.navy,b:"none"},outline:{bg:C.whiteFaint,fg:C.white,b:`1px solid ${C.borderFaint}`},teal:{bg:C.teal+"44",fg:C.tealLight,b:`1px solid ${C.teal}`},danger:{bg:C.crimson+"33",fg:C.crimsonLight,b:`1px solid ${C.crimson}55`},purple:{bg:C.purple+"44",fg:C.purpleLight,b:`1px solid ${C.purple}`},green:{bg:C.green+"44",fg:C.greenLight,b:`1px solid ${C.green}`}};
   const s=m[v]||m.gold;
-  return{padding:"10px 14px",borderRadius:10,border:s.b,background:s.bg,color:s.fg,fontFamily:"Georgia,serif",fontSize:12,fontWeight:700,cursor:"pointer"};
+  return{padding:"10px 14px",borderRadius:10,border:s.b,background:s.bg,color:s.fg,fontFamily:"Georgia,serif",fontSize:12,fontWeight:700,cursor:"pointer",transition:"opacity 0.15s"};
 };
 const inp={width:"100%",background:C.whiteFaint,border:`1px solid ${C.border}`,borderRadius:10,color:C.white,fontFamily:"Inter,sans-serif",fontSize:13,padding:"10px 12px",outline:"none",boxSizing:"border-box"};
-const crd=(acc)=>({background:C.card,border:`1px solid ${acc?acc+"44":C.borderFaint}`,borderRadius:16,padding:16,marginBottom:10,borderLeft:acc?`3px solid ${acc}`:undefined});
+const crd=(acc,extra={})=>({background:C.card,border:`1px solid ${acc?acc+"44":C.borderFaint}`,borderRadius:16,padding:16,marginBottom:10,borderLeft:acc?`3px solid ${acc}`:undefined,...extra});
 const bdg=c=>({fontFamily:"monospace",fontSize:9,padding:"3px 8px",borderRadius:10,background:c+"22",color:c,border:`1px solid ${c}55`,whiteSpace:"nowrap",display:"inline-block"});
 
 function PBar({pct,color,h=4}){
   return React.createElement("div",{style:{height:h,background:C.whiteFaint,borderRadius:2,overflow:"hidden",marginTop:4}},
-    React.createElement("div",{style:{height:"100%",width:Math.min(100,pct)+"%",borderRadius:2,background:color,transition:"width 0.6s"}}));
+    React.createElement("div",{style:{height:"100%",width:Math.min(100,pct)+"%",borderRadius:2,background:color,transition:"width 0.8s ease"}}));
 }
 function Bdg({children,color}){return React.createElement("span",{style:bdg(color)},children);}
 function SLbl({children}){
@@ -237,7 +213,7 @@ function SLbl({children}){
 }
 function Modal({open,onClose,title,children}){
   if(!open)return null;
-  return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"},onClick:e=>e.target===e.currentTarget&&onClose()},
+  return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"},onClick:e=>e.target===e.currentTarget&&onClose()},
     React.createElement("div",{style:{background:C.card2,border:`1px solid ${C.border}`,borderRadius:"24px 24px 0 0",padding:"18px 16px 40px",width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto"}},
       React.createElement("div",{style:{width:40,height:4,borderRadius:2,background:C.whiteDim,margin:"0 auto 14px"}}),
       title&&React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700,color:C.gold,marginBottom:12}},title),
@@ -262,26 +238,194 @@ function Compass(){
     React.createElement("circle",{cx:22,cy:22,r:2.5,fill:C.gold}));
 }
 
-// ── DAILY CHECKLIST (today view) ──
-function DailyTab({seasons,setSeasons,xp,onXP}){
+// ── FOCUS TIMER ──
+function FocerTimer({onXP}){
+  const[running,setRunning]=useState(false);
+  const[elapsed,setElapsed]=useState(0);
+  const[duration,setDuration]=useState(45*60);
+  const[label,setLabel]=useState("AMORC Study");
+  const[done,setDone]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(running){ref.current=setInterval(()=>setElapsed(e=>{if(e+1>=duration){clearInterval(ref.current);setRunning(false);setDone(true);onXP(25,"Focus session complete! +25 XP");return duration;}return e+1;}),1000);}
+    return()=>clearInterval(ref.current);
+  },[running,duration]);
+  const reset=()=>{clearInterval(ref.current);setRunning(false);setElapsed(0);setDone(false);};
+  const remaining=duration-elapsed;
+  const mm=String(Math.floor(remaining/60)).padStart(2,"0");
+  const ss=String(remaining%60).padStart(2,"0");
+  const pct=elapsed/duration*100;
+  const PRESETS=[{l:"AMORC Study",d:45},{l:"Book Writing",d:90},{l:"LMA Study",d:60},{l:"Deep Work",d:50}];
+  return React.createElement("div",{style:crd(done?C.greenLight:running?C.gold:C.tealLight)},
+    React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:10}},"FOCUS TIMER"),
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:16}},
+      React.createElement("div",{style:{position:"relative",width:80,height:80,flexShrink:0}},
+        React.createElement("svg",{width:80,height:80,viewBox:"0 0 80 80"},
+          React.createElement("circle",{cx:40,cy:40,r:34,fill:"none",stroke:C.whiteFaint,strokeWidth:6}),
+          React.createElement("circle",{cx:40,cy:40,r:34,fill:"none",stroke:done?C.greenLight:running?C.gold:C.tealLight,strokeWidth:6,strokeDasharray:213.6,strokeDashoffset:213.6*(1-pct/100),strokeLinecap:"round",transform:"rotate(-90 40 40)",style:{transition:"stroke-dashoffset 1s linear"}})),
+        React.createElement("div",{style:{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}},
+          React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:done?12:16,fontWeight:700,color:done?C.greenLight:C.white,animation:running&&!done?"timerPulse 2s infinite":undefined}},done?"Done!":mm+":"+ss),
+          !done&&React.createElement("div",{style:{fontSize:8,color:C.whiteDim,fontFamily:"monospace"}},Math.round(pct)+"%"))),
+      React.createElement("div",{style:{flex:1}},
+        React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:13,fontWeight:600,color:C.white,marginBottom:6}},label),
+        React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}},
+          PRESETS.map(p=>React.createElement("div",{key:p.l,onClick:()=>{if(!running){setLabel(p.l);setDuration(p.d*60);setElapsed(0);}},style:{padding:"3px 8px",borderRadius:10,border:`1px solid ${label===p.l?C.gold:C.borderFaint}`,background:label===p.l?C.goldGlow:C.whiteFaint,color:label===p.l?C.gold:C.whiteDim,fontSize:9,fontFamily:"monospace",cursor:"pointer"}},p.l))),
+        React.createElement("div",{style:{display:"flex",gap:8}},
+          React.createElement("button",{style:{...st(running?"danger":"gold"),flex:1,padding:"8px"},onClick:()=>setRunning(!running)},running?"Pause":"Start"),
+          React.createElement("button",{style:{...st("outline"),padding:"8px"},onClick:reset},"Reset")))));
+}
+
+// ── HABIT CALENDAR ──
+function HabitCalendar({checkinData,wordData}){
+  const[viewMonth,setViewMonth]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()};});
+  const today=td();
+  
+  const getDaysInMonth=(y,m)=>new Date(y,m+1,0).getDate();
+  const getFirstDay=(y,m)=>new Date(y,m,1).getDay();
+  
+  const daysInMonth=getDaysInMonth(viewMonth.y,viewMonth.m);
+  const firstDay=getFirstDay(viewMonth.y,viewMonth.m);
+  const monthStr=viewMonth.y+"-"+String(viewMonth.m+1).padStart(2,"0");
+  
+  const prevMonth=()=>setViewMonth(v=>{if(v.m===0)return{y:v.y-1,m:11};return{y:v.y,m:v.m-1};});
+  const nextMonth=()=>setViewMonth(v=>{if(v.m===11)return{y:v.y+1,m:0};return{y:v.y,m:v.m+1};});
+  
+  const getStatus=day=>{
+    const dateStr=viewMonth.y+"-"+String(viewMonth.m+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");
+    if(dateStr>today)return"future";
+    const ci=checkinData[dateStr];
+    const words=wordData[dateStr]||0;
+    if(ci==="full")return"full"; // all daily tasks done
+    if(ci==="partial"||words>0)return"partial";
+    if(dateStr<today)return"missed";
+    return"today";
+  };
+  
+  const statusColor={full:C.greenLight,partial:C.gold,missed:C.crimson+"88",today:C.tealLight,future:"transparent"};
+  const statusEmoji={full:"⭐",partial:"◑",missed:"·",today:"◉",future:""};
+  
+  const monthName=new Date(viewMonth.y,viewMonth.m,1).toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+  const days=["S","M","T","W","T","F","S"];
+  
+  // Stats for month
+  const fullDays=[...Array(daysInMonth)].filter((_,i)=>getStatus(i+1)==="full").length;
+  const partialDays=[...Array(daysInMonth)].filter((_,i)=>getStatus(i+1)==="partial").length;
+  const missedDays=[...Array(daysInMonth)].filter((_,i)=>getStatus(i+1)==="missed").length;
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:crd(C.tealLight)},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        React.createElement("button",{onClick:prevMonth,style:{background:"none",border:"none",color:C.whiteDim,cursor:"pointer",fontSize:18,padding:"0 4px"}},"‹"),
+        React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:14,fontWeight:600,color:C.white}},monthName),
+        React.createElement("button",{onClick:nextMonth,style:{background:"none",border:"none",color:C.whiteDim,cursor:"pointer",fontSize:18,padding:"0 4px"}},"›")),
+      // Day headers
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}},
+        days.map((d,i)=>React.createElement("div",{key:i,style:{textAlign:"center",fontSize:8,color:C.whiteDim,fontFamily:"monospace",padding:"2px 0"}},d))),
+      // Calendar grid
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}},
+        [...Array(firstDay)].map((_,i)=>React.createElement("div",{key:"e"+i})),
+        [...Array(daysInMonth)].map((_,i)=>{
+          const day=i+1;
+          const status=getStatus(day);
+          const isToday=td()===viewMonth.y+"-"+String(viewMonth.m+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");
+          return React.createElement("div",{key:day,style:{aspectRatio:"1",borderRadius:6,background:status==="future"?C.whiteFaint:statusColor[status]+"33",border:`1px solid ${isToday?C.gold:status==="future"?C.borderFaint:statusColor[status]+"66"}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontSize:8,color:status==="future"?C.whiteDim:statusColor[status]}},
+            React.createElement("div",{style:{fontSize:9,fontWeight:isToday?700:400}},day),
+            status!=="future"&&React.createElement("div",{style:{fontSize:7}},statusEmoji[status]));
+        })),
+      // Legend + stats
+      React.createElement("div",{style:{display:"flex",gap:12,marginTop:12,justifyContent:"center"}},
+        [[C.greenLight,"⭐","Full"],[C.gold,"◑","Partial"],[C.crimson,"·","Missed"]].map(([c,e,l])=>
+          React.createElement("div",{key:l,style:{display:"flex",alignItems:"center",gap:4,fontSize:9,fontFamily:"monospace",color:C.whiteDim}},
+            React.createElement("div",{style:{width:8,height:8,borderRadius:2,background:c+"44",border:`1px solid ${c}66`}}),l))),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:10}},
+        [[fullDays,"Full Days",C.greenLight],[partialDays,"Partial",C.gold],[missedDays,"Missed",C.crimsonLight]].map(([v,l,c])=>
+          React.createElement("div",{key:l,style:{textAlign:"center",background:C.whiteFaint,borderRadius:8,padding:"6px 4px"}},
+            React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700,color:c}},v),
+            React.createElement("div",{style:{fontSize:8,color:C.whiteDim,fontFamily:"monospace"}},l))))));
+}
+
+// ── BRAHMACHARYA TRACKER ──
+function BrahmaTracker({brahmaStart,setBrahmaStart,onXP}){
+  const days=brahmaStart?dsince(brahmaStart):0;
+  const pct=Math.min(100,Math.round(days/90*100));
+  const milestones=[{d:7,l:"First Week"},{d:21,l:"Habit"},{d:40,l:"Halfway"},{d:90,l:"Complete"}];
+  return React.createElement("div",{style:crd(C.purpleLight)},
+    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:2}},"BRAHMACHARYA"),
+        React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:28,fontWeight:700,color:C.purpleLight}},days),
+        React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace"}},"/90 days")),
+      React.createElement("div",{style:{textAlign:"right"}},
+        React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:22,fontWeight:700,color:C.white}},pct+"%"),
+        !brahmaStart&&React.createElement("button",{style:{...st("purple"),padding:"8px 12px",fontSize:11,marginTop:6},onClick:()=>{setBrahmaStart(td());onXP(10,"Brahmacharya begun. The work starts now.");}},
+          "Begin"),
+        brahmaStart&&days>=90&&React.createElement(Bdg,{color:C.greenLight},"COMPLETE ✓"))),
+    React.createElement(PBar,{pct,color:C.purpleLight,h:6}),
+    React.createElement("div",{style:{display:"flex",gap:6,marginTop:10}},
+      milestones.map(m=>React.createElement("div",{key:m.d,style:{flex:1,textAlign:"center",padding:"5px 2px",borderRadius:8,background:days>=m.d?C.purple+"44":C.whiteFaint,border:`1px solid ${days>=m.d?C.purpleLight:C.borderFaint}`}},
+        React.createElement("div",{style:{fontSize:9,fontWeight:700,color:days>=m.d?C.purpleLight:C.whiteDim}},"D"+m.d),
+        React.createElement("div",{style:{fontSize:7,color:C.whiteDim,fontFamily:"monospace"}},m.l)))));
+}
+
+// ── WORD COUNT TRACKER ──
+function WordTracker({wordLog,setWordLog,onXP}){
+  const[input,setInput]=useState("");
+  const[note,setNote]=useState("");
+  const total=Object.values(wordLog||{}).reduce((a,v)=>a+(v.words||0),0);
+  const target=120000;
+  const pct=Math.min(100,Math.round(total/target*100));
+  const todayWords=(wordLog||{})[td()]?.words||0;
+  const log=()=>{
+    const w=parseInt(input)||0;if(!w)return;
+    const entry={words:w,note:note.trim(),time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})};
+    setWordLog(wl=>({...(wl||{}),[td()]:entry}));
+    onXP(25,"Writing session logged! +25 XP");
+    setInput("");setNote("");
+  };
+  const recent=Object.entries(wordLog||{}).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,5);
+  return React.createElement("div",{style:crd(C.purpleLight)},
+    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:2}},"RAVENBORN CHRONICLES"),
+        React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:24,fontWeight:700,color:C.purpleLight}},total.toLocaleString()),
+        React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace"}},"/ 120,000 words")),
+      React.createElement("div",{style:{textAlign:"right"}},
+        React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:18,fontWeight:700,color:C.white}},pct+"%"),
+        todayWords>0&&React.createElement("div",{style:{fontSize:10,color:C.gold,fontFamily:"monospace",marginTop:2}},"+"+todayWords+" today"))),
+    React.createElement(PBar,{pct,color:C.purpleLight,h:6}),
+    React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
+      React.createElement("input",{type:"number",style:{...inp,flex:1},value:input,onChange:e=>setInput(e.target.value),placeholder:"Words written today..."}),
+      React.createElement("button",{style:{...st("purple"),padding:"10px 12px"},onClick:log},"Log")),
+    note!==undefined&&React.createElement("input",{style:{...inp,marginTop:6,fontSize:11},value:note,onChange:e=>setNote(e.target.value),placeholder:"Session note (optional)..."}),
+    recent.length>0&&React.createElement("div",{style:{marginTop:10}},
+      recent.map(([date,entry])=>React.createElement("div",{key:date,style:{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.borderFaint}`,fontSize:11}},
+        React.createElement("span",{style:{color:C.whiteDim,fontFamily:"monospace"}},fmtShort(date)),
+        React.createElement("span",{style:{color:C.purpleLight,fontWeight:600}},"+"+entry.words.toLocaleString()),
+        entry.note&&React.createElement("span",{style:{color:C.whiteDim,fontSize:10,flex:1,textAlign:"right",marginLeft:8,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},entry.note)))));
+}
+
+// ── TODAY TAB ──
+function TodayTab({seasons,setSeasons,xp,onXP,brahmaStart,setBrahmaStart,wordLog,setWordLog,checkinData,setCheckinData}){
   const season=gcs(seasons);
   const meta=season?gst(season.type):STYPES[0];
   const isOffshore=season&&season.type==="on";
   const goals=season?season.goals||[]:[];
-  
-  // Separate daily rhythm goals from season goals
   const dailyIds=isOffshore?OFFSHORE_DAILY.map(g=>g.id):HOME_DAILY.map(g=>g.id);
   const dailyGoals=goals.filter(g=>dailyIds.includes(g.id));
   const seasonGoals=goals.filter(g=>!dailyIds.includes(g.id));
-  
   const todayKey=td();
   const ciDone=localStorage.getItem("ci_"+todayKey);
-  
-  // Daily goal completion for today
-  const getDailyDone=gid=>!!localStorage.getItem(`dg_${gid}_${todayKey}`);
-  const setDailyDone=(gid)=>{
+  const quote=getDailyQuote();
+  const[showTimer,setShowTimer]=useState(false);
+
+  const logDaily=(gid)=>{
     localStorage.setItem(`dg_${gid}_${todayKey}`,"1");
-    onXP(XPR.checkin,"Daily practice logged! +15 XP");
+    // Update checkin data
+    const allIds=isOffshore?OFFSHORE_DAILY.map(g=>g.id):HOME_DAILY.map(g=>g.id);
+    const doneCount=allIds.filter(id=>!!localStorage.getItem(`dg_${id}_${todayKey}`)).length+1;
+    const status=doneCount>=allIds.length?"full":"partial";
+    setCheckinData(cd=>({...(cd||{}),[todayKey]:status}));
+    onXP(15,"Daily practice logged! +15 XP");
   };
 
   const togT=(gid,tid)=>setSeasons(ss=>ss.map(s=>{
@@ -290,65 +434,219 @@ function DailyTab({seasons,setSeasons,xp,onXP}){
   }));
 
   return React.createElement("div",null,
-    // Header
+    // Quote
+    React.createElement("div",{style:{background:`linear-gradient(135deg,${C.goldGlow},rgba(42,107,124,0.08))`,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 14px",marginBottom:10}},
+      React.createElement("div",{style:{fontSize:12,color:C.white,fontStyle:"italic",lineHeight:1.7,fontFamily:"Georgia,serif"}},'"'+quote+'"')),
+    // Season + checkin
     React.createElement("div",{style:{...crd(meta.color),background:`linear-gradient(135deg,${meta.color}14,${C.card})`}},
-      React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:meta.color,letterSpacing:2,marginBottom:2}},meta.icon+" TODAY · "+new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})),
-      React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:18,fontWeight:700,color:C.white,marginBottom:1}},season?season.name:"No Active Season"),
-      React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace"}},isOffshore?"Offshore Mode":"Home Mode")),
-
-    // Check-in
-    !ciDone&&React.createElement("div",{onClick:()=>{localStorage.setItem("ci_"+todayKey,"1");onXP(XPR.checkin,"Daily check-in! +15 XP");},style:{...crd(C.gold),cursor:"pointer",textAlign:"center",padding:"14px 16px",background:`linear-gradient(135deg,${C.gold}10,${C.card})`}},
-      React.createElement("div",{style:{fontSize:22,marginBottom:4}},"🌅"),
-      React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:14,fontWeight:600,color:C.gold}},"Check In — Start Your Day"),
-      React.createElement("div",{style:{fontSize:10,color:C.whiteDim,marginTop:2}},"+15 XP")),
-
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:meta.color,letterSpacing:2,marginBottom:1}},meta.icon+" "+new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short"})),
+          React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700,color:C.white}},season?season.name:"No Season"),
+          React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace"}},isOffshore?"⚓ Offshore Mode":"🏠 Home Mode")),
+        !ciDone?
+          React.createElement("button",{style:{...st("gold"),padding:"10px 14px"},onClick:()=>{localStorage.setItem("ci_"+todayKey,"1");setCheckinData(cd=>({...(cd||{}),[todayKey]:(cd||{})[todayKey]||"partial"}));onXP(15,"Good morning. +15 XP");}},
+            "🌅 Check In"):
+          React.createElement(Bdg,{color:C.greenLight},"✓ Checked In"))),
+    // Brahmacharya prominent
+    React.createElement(BrahmaTracker,{brahmaStart,setBrahmaStart,onXP}),
+    // Focus timer toggle
+    React.createElement("div",{onClick:()=>setShowTimer(!showTimer),style:{...crd(C.tealLight),cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px"}},
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+        React.createElement("span",{style:{fontSize:18}},"⏱️"),
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.white}},"Focus Timer"),
+          React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace"}},"AMORC · Book · LMA · Deep Work"))),
+      React.createElement("span",{style:{color:C.whiteDim,fontSize:14}},showTimer?"▲":"▼")),
+    showTimer&&React.createElement(FocerTimer,{onXP}),
     // Daily rhythm
-    React.createElement(SLbl,null,isOffshore?"Offshore Daily Rhythm":"Home Daily Rhythm"),
+    React.createElement(SLbl,null,isOffshore?"Offshore Daily":"Home Daily"),
     dailyGoals.map(g=>{
-      const done=getDailyDone(g.id);
+      const done=!!localStorage.getItem(`dg_${g.id}_${todayKey}`);
       const cat=gcat(g.category);
-      return React.createElement("div",{key:g.id,style:{...crd(done?C.greenLight:cat.color),opacity:done?0.7:1}},
+      return React.createElement("div",{key:g.id,style:{...crd(done?C.greenLight:cat.color),opacity:done?0.65:1,transition:"opacity 0.3s"}},
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
           React.createElement("div",{style:{display:"flex",gap:8,alignItems:"flex-start",flex:1}},
-            React.createElement("span",{style:{fontSize:18,marginTop:1}},cat.icon),
+            React.createElement("span",{style:{fontSize:16,marginTop:1}},cat.icon),
             React.createElement("div",null,
-              React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.white,marginBottom:2}},g.title),
-              React.createElement("div",{style:{fontSize:10,color:C.whiteDim,lineHeight:1.5}},g.notes))),
-          done?
-            React.createElement(Bdg,{color:C.greenLight},"✓ Done"):
-            React.createElement("button",{style:{...st("teal"),padding:"8px 12px",fontSize:11,flexShrink:0},onClick:()=>setDailyDone(g.id)},"Log")));
+              React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.white}},g.title),
+              React.createElement("div",{style:{fontSize:10,color:C.whiteDim,lineHeight:1.5,marginTop:1}},g.notes))),
+          done?React.createElement(Bdg,{color:C.greenLight},"✓"):
+            React.createElement("button",{style:{...st("teal"),padding:"7px 11px",fontSize:11,flexShrink:0,marginLeft:8},onClick:()=>logDaily(g.id)},"Log")));
     }),
-
-    // Season goals progress
+    // Word tracker
+    React.createElement(SLbl,null,"The Book"),
+    React.createElement(WordTracker,{wordLog,setWordLog,onXP}),
+    // Season goals summary
     seasonGoals.length>0&&React.createElement("div",null,
       React.createElement(SLbl,null,"Season Goals"),
-      seasonGoals.map(g=>{
+      seasonGoals.slice(0,3).map(g=>{
         const cat=gcat(g.category);
         const tot=g.tasks?g.tasks.length:0;
         const done=g.tasks?g.tasks.filter(t=>t.done).length:0;
         const pct=tot?Math.round(done/tot*100):0;
         return React.createElement("div",{key:g.id,style:crd(cat.color)},
-          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginBottom:8}},
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginBottom:6}},
             React.createElement("span",{style:{fontSize:16}},cat.icon),
-            React.createElement("div",{style:{flex:1}},
-              React.createElement("div",{style:{fontSize:12,fontWeight:600,color:C.white}},g.title),
-              React.createElement("div",{style:{fontSize:9,color:C.whiteDim,fontFamily:"monospace",marginTop:1}},cat.label)),
+            React.createElement("div",{style:{flex:1,fontSize:12,fontWeight:600,color:C.white}},g.title),
             React.createElement(Bdg,{color:pct===100?C.greenLight:cat.color},pct+"%")),
           React.createElement(PBar,{pct,color:cat.color}),
-          g.tasks&&g.tasks.slice(0,3).map(t=>React.createElement("div",{key:t.id,onClick:()=>{togT(g.id,t.id);if(!t.done)onXP(XPR.task,"Task done! +10 XP");},style:{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.borderFaint}`,cursor:"pointer"}},
-            React.createElement("div",{style:{width:16,height:16,borderRadius:3,border:`1.5px solid ${t.done?C.gold:C.whiteDim}`,background:t.done?C.gold:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
+          g.tasks&&g.tasks.slice(0,2).map(t=>React.createElement("div",{key:t.id,onClick:()=>{togT(g.id,t.id);if(!t.done)onXP(10,"Task done! +10 XP");},style:{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:`1px solid ${C.borderFaint}`,cursor:"pointer",marginTop:6}},
+            React.createElement("div",{style:{width:15,height:15,borderRadius:3,border:`1.5px solid ${t.done?C.gold:C.whiteDim}`,background:t.done?C.gold:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
               t.done&&React.createElement("span",{style:{color:C.navy,fontSize:9,fontWeight:700}},"✓")),
-            React.createElement("div",{style:{fontSize:11,color:t.done?C.whiteDim:C.white,textDecoration:t.done?"line-through":"none"}},t.text))),
-          g.tasks&&g.tasks.length>3&&React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginTop:6}},`+ ${g.tasks.length-3} more tasks in Goals tab`));
+            React.createElement("div",{style:{fontSize:11,color:t.done?C.whiteDim:C.white,textDecoration:t.done?"line-through":"none"}},t.text))));
       })));
+}
+
+// ── CALENDAR TAB ──
+function CalendarTab({checkinData,wordLog}){
+  return React.createElement("div",null,
+    React.createElement(SLbl,null,"Habit Calendar"),
+    React.createElement(HabitCalendar,{checkinData:checkinData||{},wordData:wordLog||{}}));
+}
+
+// ── MORE TAB — Astrology, Immigration, Contacts, Reading, Notes, Vision ──
+function MoreTab({seasons,setSeasons,contacts,setContacts,books,setBooks,visionNotes,setVisionNotes,seasonNotes,setSeasonNotes}){
+  const[section,setSection]=useState("astro");
+  const[showContactForm,setShowContactForm]=useState(false);
+  const[showBookForm,setShowBookForm]=useState(false);
+  const[cf,setCf]=useState({id:uid(),name:"",role:"",notes:"",lastContact:"",followUp:"",status:"warm"});
+  const[bf,setBf]=useState({id:uid(),title:"",author:"",status:"reading",progress:0,notes:""});
+  const curSeason=gcs(seasons);
+
+  const SECTIONS=[
+    {id:"astro",icon:"🔮",label:"Dasha"},
+    {id:"immig",icon:"🗺️",label:"Immigration"},
+    {id:"contacts",icon:"🤝",label:"Network"},
+    {id:"books",icon:"📚",label:"Reading"},
+    {id:"vision",icon:"🦅",label:"Vision"},
+    {id:"notes",icon:"📓",label:"Notes"},
+  ];
+
+  return React.createElement("div",null,
+    // Section nav
+    React.createElement("div",{style:{display:"flex",gap:5,overflowX:"auto",paddingBottom:10,marginBottom:4}},
+      SECTIONS.map(s=>React.createElement("div",{key:s.id,onClick:()=>setSection(s.id),style:{flexShrink:0,padding:"6px 12px",borderRadius:14,border:`1px solid ${section===s.id?C.gold:C.borderFaint}`,background:section===s.id?C.goldGlow:C.whiteFaint,color:section===s.id?C.gold:C.whiteDim,fontSize:10,fontFamily:"monospace",cursor:"pointer"}},s.icon+" "+s.label))),
+
+    // ASTROLOGY
+    section==="astro"&&React.createElement("div",null,
+      React.createElement("div",{style:{...crd(C.purpleLight),background:`linear-gradient(135deg,${C.purple}22,${C.card})`}},
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:4}},"VEDIC ASTROLOGY — JYOTISH"),
+        React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:18,fontWeight:700,color:C.purpleLight,marginBottom:2}},DASHA_INFO.name),
+        React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:10}},DASHA_INFO.start+" → "+DASHA_INFO.end+" · "+DASHA_INFO.current),
+        React.createElement("div",{style:{fontSize:12,color:C.white,lineHeight:1.7,marginBottom:10}},DASHA_INFO.theme),
+        React.createElement("div",{style:{background:C.whiteFaint,borderRadius:10,padding:12}},
+          React.createElement("div",{style:{fontSize:10,color:C.goldDim,fontFamily:"monospace",marginBottom:6,letterSpacing:1}},"NAVIGATION GUIDANCE"),
+          React.createElement("div",{style:{fontSize:11,color:C.whiteDim,lineHeight:1.7}},DASHA_INFO.guidance))),
+      React.createElement("div",{style:crd(C.purpleLight)},
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:8}},"DASHA TIMELINE"),
+        [{period:"Saturn–Saturn",dates:"2020–2023",done:true},{period:"Saturn–Mercury",dates:"2023–2025",done:true},{period:"Saturn–Ketu",dates:"2025–2026",done:false},{period:"Saturn–Venus",dates:"2026–2029",done:false},{period:"Saturn–Sun",dates:"2029–2030",done:false},{period:"Saturn–Moon",dates:"2030–2031",done:false},{period:"Saturn–Mars",dates:"2031–2032",done:false},{period:"Saturn–Rahu",dates:"2032–2034",done:false},{period:"Saturn–Jupiter",dates:"2034–2035",done:false}].map(d=>
+          React.createElement("div",{key:d.period,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.borderFaint}`}},
+            React.createElement("div",{style:{fontSize:12,color:d.done?C.whiteDim:C.white,textDecoration:d.done?"line-through":"none"}},d.period),
+            React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace"}},d.dates)))),
+      React.createElement("div",{style:{...crd(undefined),marginTop:4}},
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:6}},"PERSONAL OBSERVATIONS"),
+        React.createElement("textarea",{style:{...inp,height:80,resize:"none",fontSize:11},placeholder:"Note patterns, synchronicities, insights as they arise..."}))
+    ),
+
+    // IMMIGRATION
+    section==="immig"&&React.createElement("div",null,
+      React.createElement(SLbl,null,"Immigration Timeline"),
+      IMMIGRATION.map(item=>React.createElement("div",{key:item.id,style:crd(item.color)},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}},
+          React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:13,fontWeight:600,color:C.white,flex:1}},item.label),
+          React.createElement(Bdg,{color:item.color},item.priority.toUpperCase())),
+        React.createElement("div",{style:{fontSize:11,color:C.whiteDim,lineHeight:1.6,marginBottom:8}},item.detail),
+        React.createElement("div",{style:{background:C.whiteFaint,borderRadius:8,padding:"8px 10px"}},
+          React.createElement("div",{style:{fontSize:9,color:C.goldDim,fontFamily:"monospace",marginBottom:3,letterSpacing:1}},"NEXT ACTION"),
+          React.createElement("div",{style:{fontSize:11,color:C.white,lineHeight:1.5}},item.next)))),
+      React.createElement("div",{style:{...crd(C.tealLight),marginTop:4}},
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:6}},"NOTES + UPDATES"),
+        React.createElement("textarea",{style:{...inp,height:80,resize:"none",fontSize:11},placeholder:"Log updates, call notes, bulletin changes..."}))),
+
+    // CONTACTS
+    section==="contacts"&&React.createElement("div",null,
+      React.createElement(SLbl,null,"Network + Relationships"),
+      (contacts||[...CONTACTS]).map(c=>React.createElement("div",{key:c.id,style:crd(c.color||C.gold)},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}},
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:13,fontWeight:600,color:C.white}},c.name),
+            React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace"}},c.role)),
+          React.createElement(Bdg,{color:{warm:C.gold,hot:C.greenLight,cold:C.crimsonLight,mentor:C.purpleLight}[c.status]||C.gold},c.status.toUpperCase())),
+        c.notes&&React.createElement("div",{style:{fontSize:11,color:C.whiteDim,lineHeight:1.5,marginTop:4}},c.notes),
+        React.createElement("div",{style:{display:"flex",gap:12,marginTop:6,fontSize:9,fontFamily:"monospace",color:C.whiteDim}},
+          c.lastContact&&React.createElement("span",null,"Last: "+c.lastContact),
+          c.followUp&&React.createElement("span",{style:{color:C.gold}},"Follow up: "+c.followUp)))),
+      React.createElement("button",{style:{...st("gold"),width:"100%",marginTop:4},onClick:()=>setShowContactForm(true)},"+ Add Contact"),
+      React.createElement(Modal,{open:showContactForm,onClose:()=>setShowContactForm(false),title:"New Contact"},
+        React.createElement("input",{style:{...inp,marginBottom:8},value:cf.name,onChange:e=>setCf(x=>({...x,name:e.target.value})),placeholder:"Name..."}),
+        React.createElement("input",{style:{...inp,marginBottom:8},value:cf.role,onChange:e=>setCf(x=>({...x,role:e.target.value})),placeholder:"Role / Company..."}),
+        React.createElement("div",{style:{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}},
+          ["warm","hot","cold","mentor"].map(s=>React.createElement("div",{key:s,onClick:()=>setCf(x=>({...x,status:s})),style:{padding:"4px 10px",borderRadius:12,border:`1px solid ${cf.status===s?C.gold:C.borderFaint}`,background:cf.status===s?C.goldGlow:C.whiteFaint,color:cf.status===s?C.gold:C.whiteDim,fontSize:10,fontFamily:"monospace",cursor:"pointer"}},s))),
+        React.createElement("textarea",{style:{...inp,height:60,resize:"none",marginBottom:8},value:cf.notes,onChange:e=>setCf(x=>({...x,notes:e.target.value})),placeholder:"Notes..."}),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}},
+          React.createElement("div",null,React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:4}},"LAST CONTACT"),React.createElement("input",{type:"month",style:inp,value:cf.lastContact,onChange:e=>setCf(x=>({...x,lastContact:e.target.value}))})),
+          React.createElement("div",null,React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:4}},"FOLLOW UP"),React.createElement("input",{type:"month",style:inp,value:cf.followUp,onChange:e=>setCf(x=>({...x,followUp:e.target.value}))}))),
+        React.createElement("button",{style:{...st("gold"),width:"100%"},onClick:()=>{setContacts(cs=>[...(cs||CONTACTS),{...cf,id:uid()}]);setShowContactForm(false);setCf({id:uid(),name:"",role:"",notes:"",lastContact:"",followUp:"",status:"warm"});}},"Save Contact"))),
+
+    // READING
+    section==="books"&&React.createElement("div",null,
+      React.createElement(SLbl,null,"Reading Log"),
+      (books||BOOKS).map(b=>React.createElement("div",{key:b.id,style:crd(b.status==="done"?C.greenLight:C.tealLight)},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}},
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:13,fontWeight:600,color:C.white}},b.title),
+            React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace"}},b.author)),
+          React.createElement(Bdg,{color:{reading:C.tealLight,done:C.greenLight,queued:C.gold}[b.status]||C.tealLight},b.status.toUpperCase())),
+        b.status==="reading"&&React.createElement("div",null,
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"monospace",color:C.whiteDim,marginBottom:3}},"Progress",React.createElement("span",{style:{color:C.tealLight}},b.progress+"%")),
+          React.createElement(PBar,{pct:b.progress,color:C.tealLight})),
+        b.notes&&React.createElement("div",{style:{fontSize:11,color:C.whiteDim,lineHeight:1.5,marginTop:6}},b.notes))),
+      React.createElement("button",{style:{...st("gold"),width:"100%",marginTop:4},onClick:()=>setShowBookForm(true)},"+ Add Book"),
+      React.createElement(Modal,{open:showBookForm,onClose:()=>setShowBookForm(false),title:"Add Book"},
+        React.createElement("input",{style:{...inp,marginBottom:8},value:bf.title,onChange:e=>setBf(x=>({...x,title:e.target.value})),placeholder:"Title..."}),
+        React.createElement("input",{style:{...inp,marginBottom:8},value:bf.author,onChange:e=>setBf(x=>({...x,author:e.target.value})),placeholder:"Author..."}),
+        React.createElement("div",{style:{display:"flex",gap:6,marginBottom:8}},
+          ["reading","queued","done"].map(s=>React.createElement("div",{key:s,onClick:()=>setBf(x=>({...x,status:s})),style:{flex:1,padding:"6px",borderRadius:10,border:`1px solid ${bf.status===s?C.gold:C.borderFaint}`,background:bf.status===s?C.goldGlow:C.whiteFaint,color:bf.status===s?C.gold:C.whiteDim,fontSize:10,fontFamily:"monospace",cursor:"pointer",textAlign:"center"}},s))),
+        bf.status==="reading"&&React.createElement("div",{style:{marginBottom:8}},
+          React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:4}},"PROGRESS: "+bf.progress+"%"),
+          React.createElement("input",{type:"range",min:0,max:100,value:bf.progress,onChange:e=>setBf(x=>({...x,progress:parseInt(e.target.value)}))})),
+        React.createElement("textarea",{style:{...inp,height:60,resize:"none",marginBottom:12},value:bf.notes,onChange:e=>setBf(x=>({...x,notes:e.target.value})),placeholder:"Notes..."}),
+        React.createElement("button",{style:{...st("gold"),width:"100%"},onClick:()=>{setBooks(bs=>[...(bs||BOOKS),{...bf,id:uid()}]);setShowBookForm(false);setBf({id:uid(),title:"",author:"",status:"reading",progress:0,notes:""});}},
+          "Save Book"))),
+
+    // VISION
+    section==="vision"&&React.createElement("div",null,
+      React.createElement("div",{style:{...crd(C.gold),background:`linear-gradient(135deg,${C.gold}10,${C.card})`}},
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:6}},"THE NORTH STAR — 10 YEAR HORIZON"),
+        React.createElement("div",{style:{fontSize:12,color:C.white,lineHeight:1.8}},
+          React.createElement("div",{style:{marginBottom:6}},"🌍 Based in the US with Theresa, immigration resolved."),
+          React.createElement("div",{style:{marginBottom:6}},"⚓ Shore-based maritime role — Superintendent, DPA, or Auditor."),
+          React.createElement("div",{style:{marginBottom:6}},"📖 Ravenborn Chronicles published."),
+          React.createElement("div",{style:{marginBottom:6}},"🔮 AMORC — advanced degree. Real teacher found."),
+          React.createElement("div",{style:{marginBottom:6}},"💼 Maritime consultancy generating income."),
+          React.createElement("div",{style:{marginBottom:6}},"🌿 Ayahuasca ceremony completed."),
+          React.createElement("div",null,"🦅 Significant wealth through business ownership."))),
+      React.createElement("div",{style:crd()},
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:6}},"YOUR VISION — ADD ANYTHING"),
+        React.createElement("textarea",{style:{...inp,height:120,resize:"none",lineHeight:1.7},value:visionNotes||"",onChange:e=>setVisionNotes(e.target.value),placeholder:"Write the life you are building. What does it look, feel, and smell like? Be specific. Be honest."}))),
+
+    // SEASON NOTES
+    section==="notes"&&React.createElement("div",null,
+      React.createElement(SLbl,null,"Season Scratchpad"),
+      React.createElement("div",{style:{...crd(gst(curSeason?.type||"on").color)}},
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:6}},curSeason?curSeason.name.toUpperCase():"CURRENT SEASON"),
+        React.createElement("textarea",{style:{...inp,height:120,resize:"none",lineHeight:1.7},value:(seasonNotes||{})[curSeason?.id]||"",onChange:e=>setSeasonNotes(sn=>({...(sn||{}),[curSeason?.id]:e.target.value})),placeholder:"Scene ideas, facilitator names, consultancy name brainstorms, anything relevant to this season's work..."})),
+      React.createElement("div",{style:crd()},
+        React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:6}},"RAVENBORN — SCENE IDEAS"),
+        React.createElement("textarea",{style:{...inp,height:100,resize:"none",lineHeight:1.7},placeholder:"Characters, scene ideas, world details, dialogue fragments. Capture everything."}))));
 }
 
 // ── GOAL CARD ──
 function GoalCard({goal,onEdit,onDel,onToggle,onXP}){
   const[open,setOpen]=useState(false);
   const cat=gcat(goal.category);
-  const tot=goal.tasks?goal.tasks.length:0;
-  const done=goal.tasks?goal.tasks.filter(t=>t.done).length:0;
+  const tot=goal.tasks?goal.tasks.length:0,done=goal.tasks?goal.tasks.filter(t=>t.done).length:0;
   const pct=tot?Math.round(done/tot*100):0;
   const pc={critical:C.crimsonLight,high:C.gold,medium:C.tealLight,low:C.whiteDim}[goal.priority]||C.whiteDim;
   return React.createElement("div",{style:crd(cat.color)},
@@ -363,165 +661,84 @@ function GoalCard({goal,onEdit,onDel,onToggle,onXP}){
           React.createElement(Bdg,{color:pc},(goal.priority||"").toUpperCase()),
           goal.status==="done"&&React.createElement(Bdg,{color:C.greenLight},"DONE"))),
       tot>0&&React.createElement("div",null,
-        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"monospace",color:C.whiteDim,marginBottom:3}},
-          React.createElement("span",null,done+"/"+tot),React.createElement("span",{style:{color:C.gold}},pct+"%")),
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"monospace",color:C.whiteDim,marginBottom:3}},done+"/"+tot,React.createElement("span",{style:{color:C.gold}},pct+"%")),
         React.createElement(PBar,{pct,color:cat.color})),
       React.createElement("div",{style:{textAlign:"right",marginTop:5,fontSize:10,color:C.whiteDim}},open?"▲":"▼")),
     open&&React.createElement("div",{style:{marginTop:10,borderTop:`1px solid ${C.borderFaint}`,paddingTop:10}},
       goal.notes&&React.createElement("div",{style:{fontSize:11,color:C.whiteDim,lineHeight:1.6,marginBottom:10}},goal.notes),
-      goal.tasks&&goal.tasks.map(t=>React.createElement("div",{key:t.id,onClick:()=>{onToggle(goal.id,t.id);if(!t.done)onXP(XPR.task,"Task done! +10 XP");},style:{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.borderFaint}`,cursor:"pointer"}},
+      goal.tasks&&goal.tasks.map(t=>React.createElement("div",{key:t.id,onClick:()=>{onToggle(goal.id,t.id);if(!t.done)onXP(10,"Task done! +10 XP");},style:{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.borderFaint}`,cursor:"pointer"}},
         React.createElement("div",{style:{width:18,height:18,borderRadius:4,border:`1.5px solid ${t.done?C.gold:C.whiteDim}`,background:t.done?C.gold:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
           t.done&&React.createElement("span",{style:{color:C.navy,fontSize:10,fontWeight:700}},"✓")),
         React.createElement("div",{style:{fontSize:12,color:t.done?C.whiteDim:C.white,textDecoration:t.done?"line-through":"none",flex:1}},t.text))),
       React.createElement("div",{style:{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}},
         React.createElement("button",{style:st("teal"),onClick:()=>onEdit(goal)},"Edit"),
         React.createElement("button",{style:st("danger"),onClick:()=>onDel(goal.id)},"Delete"),
-        done===tot&&tot>0&&goal.status!=="done"&&React.createElement("button",{style:st("gold"),onClick:()=>{onEdit({...goal,status:"done"});onXP(XPR.goal,"Goal complete! +50 XP");}},"Mark Done"))));
+        done===tot&&tot>0&&goal.status!=="done"&&React.createElement("button",{style:st("gold"),onClick:()=>{onEdit({...goal,status:"done"});onXP(50,"Goal complete! +50 XP");}},"Mark Done"))));
 }
 
-// ── GOAL EDITOR ──
 function GoalEditor({goal,onSave,onClose}){
   const[f,sf]=useState(goal||{id:uid(),title:"",category:"goals",priority:"medium",status:"pending",notes:"",tasks:[]});
   const[nt,snt]=useState("");
   const addT=()=>{if(!nt.trim())return;sf(x=>({...x,tasks:[...(x.tasks||[]),{id:uid(),text:nt.trim(),done:false}]}));snt("");};
   return React.createElement("div",null,
-    React.createElement("input",{style:{...inp,marginBottom:10},value:f.title,onChange:e=>sf(x=>({...x,title:e.target.value})),placeholder:"Goal title..."}),
-    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}},
-      React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:4}},"CATEGORY"),
-        React.createElement("select",{style:{...inp,padding:"9px 12px"},value:f.category,onChange:e=>sf(x=>({...x,category:e.target.value}))},
-          CATS.map(c=>React.createElement("option",{key:c.id,value:c.id},c.icon+" "+c.label)))),
-      React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:4}},"PRIORITY"),
-        React.createElement("select",{style:{...inp,padding:"9px 12px"},value:f.priority,onChange:e=>sf(x=>({...x,priority:e.target.value}))},
-          React.createElement("option",{value:"critical"},"Critical"),
-          React.createElement("option",{value:"high"},"High"),
-          React.createElement("option",{value:"medium"},"Medium"),
-          React.createElement("option",{value:"low"},"Low")))),
-    React.createElement("textarea",{style:{...inp,height:65,resize:"none",lineHeight:1.6,marginBottom:10},value:f.notes,onChange:e=>sf(x=>({...x,notes:e.target.value})),placeholder:"Notes..."}),
-    React.createElement("div",{style:{marginBottom:14}},
-      React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:6}},"TASKS"),
+    React.createElement("input",{style:{...inp,marginBottom:8},value:f.title,onChange:e=>sf(x=>({...x,title:e.target.value})),placeholder:"Goal title..."}),
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}},
+      React.createElement("select",{style:{...inp,padding:"9px 12px"},value:f.category,onChange:e=>sf(x=>({...x,category:e.target.value}))},CATS.map(c=>React.createElement("option",{key:c.id,value:c.id},c.icon+" "+c.label))),
+      React.createElement("select",{style:{...inp,padding:"9px 12px"},value:f.priority,onChange:e=>sf(x=>({...x,priority:e.target.value}))},
+        ["critical","high","medium","low"].map(p=>React.createElement("option",{key:p,value:p},p.charAt(0).toUpperCase()+p.slice(1))))),
+    React.createElement("textarea",{style:{...inp,height:60,resize:"none",marginBottom:8},value:f.notes,onChange:e=>sf(x=>({...x,notes:e.target.value})),placeholder:"Notes..."}),
+    React.createElement("div",{style:{marginBottom:12}},
       (f.tasks||[]).map(t=>React.createElement("div",{key:t.id,style:{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.borderFaint}`}},
         React.createElement("div",{style:{flex:1,fontSize:12,color:C.white}},t.text),
         React.createElement("button",{onClick:()=>sf(x=>({...x,tasks:x.tasks.filter(z=>z.id!==t.id)})),style:{background:"none",border:"none",color:C.whiteDim,cursor:"pointer",fontSize:14}},"✕"))),
       React.createElement("div",{style:{display:"flex",gap:8,marginTop:8}},
-        React.createElement("input",{style:{...inp,flex:1},value:nt,onChange:e=>snt(e.target.value),onKeyDown:e=>{if(e.key==="Enter"&&nt.trim()){sf(x=>({...x,tasks:[...(x.tasks||[]),{id:uid(),text:nt.trim(),done:false}]}));snt("");}},placeholder:"Add task..."}),
-        React.createElement("button",{style:st("teal"),onClick:addT},"+")),
-      React.createElement("div",{style:{display:"flex",gap:10,marginTop:10}},
-        React.createElement("button",{style:{...st("gold"),flex:1},onClick:()=>onSave(f)},"Save Goal"),
-        React.createElement("button",{style:st("outline"),onClick:onClose},"Cancel"))));
-}
-
-// ── SEASON EDITOR ──
-function SeasonEditor({season,onSave,onClose}){
-  const[f,sf]=useState(season||{id:uid(),name:"",type:"custom",start:td(),end:td(),goals:[],notes:""});
-  return React.createElement("div",null,
-    React.createElement("input",{style:{...inp,marginBottom:10},value:f.name,onChange:e=>sf(x=>({...x,name:e.target.value})),placeholder:"Season name..."}),
-    React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}},
-      STYPES.map(t=>React.createElement("div",{key:t.id,onClick:()=>sf(x=>({...x,type:t.id})),style:{padding:"5px 10px",borderRadius:16,border:`1px solid ${f.type===t.id?t.color:C.borderFaint}`,background:f.type===t.id?t.color+"22":C.whiteFaint,color:f.type===t.id?t.color:C.whiteDim,fontSize:10,fontFamily:"monospace",cursor:"pointer"}},t.icon+" "+t.label))),
-    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}},
-      React.createElement("div",null,React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:4}},"START"),React.createElement("input",{type:"date",style:inp,value:f.start,onChange:e=>sf(x=>({...x,start:e.target.value}))})),
-      React.createElement("div",null,React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:4}},"END"),React.createElement("input",{type:"date",style:inp,value:f.end,onChange:e=>sf(x=>({...x,end:e.target.value}))}))),
-    React.createElement("textarea",{style:{...inp,height:55,resize:"none",marginBottom:14},value:f.notes,onChange:e=>sf(x=>({...x,notes:e.target.value})),placeholder:"Season intentions..."}),
+        React.createElement("input",{style:{...inp,flex:1},value:nt,onChange:e=>snt(e.target.value),onKeyDown:e=>{if(e.key==="Enter"){addT();}},placeholder:"Add task..."}),
+        React.createElement("button",{style:st("teal"),onClick:addT},"+"))),
     React.createElement("div",{style:{display:"flex",gap:10}},
-      React.createElement("button",{style:{...st("gold"),flex:1},onClick:()=>onSave(f)},"Save Season"),
+      React.createElement("button",{style:{...st("gold"),flex:1},onClick:()=>onSave(f)},"Save Goal"),
       React.createElement("button",{style:st("outline"),onClick:onClose},"Cancel")));
 }
 
-// ── OVERVIEW TAB ──
-function OverviewTab({seasons,season,xp,onXP}){
-  const meta=season?gst(season.type):STYPES[0];
-  const prog=season?gsp(season):0;
-  const left=season?dleft(season.end):0;
-  const goals=season?season.goals||[]:[];
-  const totT=goals.reduce((a,g)=>a+(g.tasks?g.tasks.length:0),0);
-  const doneT=goals.reduce((a,g)=>a+(g.tasks?g.tasks.filter(t=>t.done).length:0),0);
-  const cur=glv(xp),nxt=gnl(xp),lvp=glp(xp);
-  return React.createElement("div",null,
-    React.createElement("div",{style:{...crd(C.gold),background:`linear-gradient(135deg,${C.gold}12,${C.card})`}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
-        React.createElement("div",null,
-          React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.goldDim,letterSpacing:2,marginBottom:2}},"LEVEL "+cur.level),
-          React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:18,fontWeight:700,color:C.gold}},cur.icon+" "+cur.title)),
-        React.createElement("div",{style:{textAlign:"right"}},
-          React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:24,fontWeight:700,color:C.white}},xp.toLocaleString()),
-          React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:C.whiteDim}},"TOTAL XP"))),
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"monospace",color:C.whiteDim,marginBottom:4}},
-        React.createElement("span",null,"Next: "+nxt.title),
-        React.createElement("span",{style:{color:C.gold}},lvp+"% · "+(nxt.xpNeeded-xp)+" XP")),
-      React.createElement(PBar,{pct:lvp,color:C.gold,h:6})),
-    React.createElement("div",{style:{...crd(meta.color),background:`linear-gradient(135deg,${meta.color}14,${C.card})`}},
-      React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:meta.color,letterSpacing:2,marginBottom:3}},meta.icon+" CURRENT SEASON"),
-      React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:18,fontWeight:700,color:C.white,marginBottom:2}},season?season.name:"No Season"),
-      season&&React.createElement("div",{style:{fontSize:10,color:C.whiteDim,fontFamily:"monospace",marginBottom:12}},fmt(season.start)+" → "+fmt(season.end)),
-      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}},
-        [[left,"Days Left",meta.color],[goals.length,"Goals",C.gold],[doneT+"/"+totT,"Tasks",C.greenLight]].map(([v,l,c])=>React.createElement("div",{key:l,style:{textAlign:"center",background:C.whiteFaint,borderRadius:10,padding:"9px 4px"}},
-          React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:17,fontWeight:700,color:c}},v),
-          React.createElement("div",{style:{fontSize:8,color:C.whiteDim,fontFamily:"monospace",marginTop:2}},l)))),
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"monospace",color:C.whiteDim,marginBottom:3}},
-        React.createElement("span",null,"Season Progress"),React.createElement("span",{style:{color:C.gold}},prog+"%")),
-      React.createElement(PBar,{pct:prog,color:meta.color,h:5})),
-    React.createElement(SLbl,null,"Three Pillars"),
-    [{icon:"🔮",label:"Inner Curriculum",sub:"Who you become",color:C.tealLight,pct:22},
-     {icon:"⚓",label:"Monthly Goals",sub:"What you build",color:C.gold,pct:totT?Math.round(doneT/totT*100):0},
-     {icon:"📖",label:"Ravenborn Chronicles",sub:"What you leave behind",color:C.purpleLight,pct:2}
-    ].map(p=>React.createElement("div",{key:p.label,style:crd(p.color)},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}},
-        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-          React.createElement("span",{style:{fontSize:18}},p.icon),
-          React.createElement("div",null,
-            React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.white}},p.label),
-            React.createElement("div",{style:{fontSize:9,color:C.whiteDim,fontFamily:"monospace"}},p.sub))),
-        React.createElement(Bdg,{color:p.color},p.pct+"%")),
-      React.createElement(PBar,{pct:p.pct,color:p.color}))),
-    React.createElement("div",{style:{background:`linear-gradient(135deg,${C.goldGlow},rgba(42,107,124,0.06))`,border:`1px solid ${C.border}`,borderRadius:16,padding:16}},
-      React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:12,lineHeight:1.8,color:C.white,fontStyle:"italic"}},'"The man who finishes this plan will not recognize the man who started it."'),
-      React.createElement("div",{style:{fontSize:9,color:C.gold,fontFamily:"monospace",marginTop:8,textAlign:"right"}},"MASTER PLAN · 2026")));
-}
-
-// ── SEASONS TAB ──
 function SeasonsTab({seasons,setSeasons,selId,setSelId}){
-  const[showE,setShowE]=useState(false);
-  const[editS,setEditS]=useState(null);
-  const[view,setView]=useState("all");
-  const t=td();
-  const filtered=view==="past"?seasons.filter(s=>s.end<t):view==="future"?seasons.filter(s=>s.start>t):seasons;
+  const[showE,setShowE]=useState(false);const[editS,setEditS]=useState(null);const[view,setView]=useState("all");
+  const t=td();const filtered=view==="past"?seasons.filter(s=>s.end<t):view==="future"?seasons.filter(s=>s.start>t):seasons;
   const save=f=>{setSeasons(ss=>{const i=ss.findIndex(s=>s.id===f.id);if(i>-1){const n=[...ss];n[i]={...n[i],...f};return n;}return[...ss,{...f,goals:[]}];});setShowE(false);setEditS(null);};
-  const del=id=>{if(!window.confirm("Delete season?"))return;setSeasons(ss=>ss.filter(s=>s.id!==id));if(selId===id)setSelId(null);};
+  const del=id=>{if(!window.confirm("Delete?"))return;setSeasons(ss=>ss.filter(s=>s.id!==id));};
+  const SeasonEditor=({season,onSave,onClose})=>{
+    const[f,sf]=useState(season||{id:uid(),name:"",type:"custom",start:td(),end:td(),goals:[],notes:""});
+    return React.createElement("div",null,
+      React.createElement("input",{style:{...inp,marginBottom:8},value:f.name,onChange:e=>sf(x=>({...x,name:e.target.value})),placeholder:"Season name..."}),
+      React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}},STYPES.map(t=>React.createElement("div",{key:t.id,onClick:()=>sf(x=>({...x,type:t.id})),style:{padding:"5px 10px",borderRadius:16,border:`1px solid ${f.type===t.id?t.color:C.borderFaint}`,background:f.type===t.id?t.color+"22":C.whiteFaint,color:f.type===t.id?t.color:C.whiteDim,fontSize:10,fontFamily:"monospace",cursor:"pointer"}},t.icon+" "+t.label))),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}},
+        React.createElement("input",{type:"date",style:inp,value:f.start,onChange:e=>sf(x=>({...x,start:e.target.value}))}),
+        React.createElement("input",{type:"date",style:inp,value:f.end,onChange:e=>sf(x=>({...x,end:e.target.value}))})),
+      React.createElement("textarea",{style:{...inp,height:55,resize:"none",marginBottom:12},value:f.notes,onChange:e=>sf(x=>({...x,notes:e.target.value})),placeholder:"Season intentions..."}),
+      React.createElement("div",{style:{display:"flex",gap:10}},React.createElement("button",{style:{...st("gold"),flex:1},onClick:()=>onSave(f)},"Save"),React.createElement("button",{style:st("outline"),onClick:onClose},"Cancel")));
+  };
   return React.createElement("div",null,
-    React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},
-      ["all","past","future"].map(v=>React.createElement("button",{key:v,style:{...st(view===v?"gold":"outline"),flex:1,fontSize:10,textTransform:"uppercase"},onClick:()=>setView(v)},v))),
+    React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},["all","past","future"].map(v=>React.createElement("button",{key:v,style:{...st(view===v?"gold":"outline"),flex:1,fontSize:10,textTransform:"uppercase"},onClick:()=>setView(v)},v))),
     filtered.map(s=>{
       const meta=gst(s.type),isCur=s.start<=t&&s.end>t,isSel=s.id===selId;
       const gs=s.goals||[],done=gs.reduce((a,g)=>a+(g.tasks?g.tasks.filter(t=>t.done).length:0),0),tot=gs.reduce((a,g)=>a+(g.tasks?g.tasks.length:0),0);
       return React.createElement("div",{key:s.id,onClick:()=>setSelId(isSel?null:s.id),style:{...crd(isSel||isCur?meta.color:undefined),cursor:"pointer",border:`1px solid ${isCur?meta.color:isSel?meta.color+"88":C.borderFaint}`}},
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
           React.createElement("div",null,
-            React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center",marginBottom:3}},
-              React.createElement("span",{style:{fontSize:14}},meta.icon),
-              React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:14,fontWeight:600,color:C.white}},s.name),
-              isCur&&React.createElement(Bdg,{color:meta.color},"ACTIVE")),
+            React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center",marginBottom:3}},React.createElement("span",{style:{fontSize:14}},meta.icon),React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:14,fontWeight:600,color:C.white}},s.name),isCur&&React.createElement(Bdg,{color:meta.color},"ACTIVE")),
             React.createElement("div",{style:{fontSize:9,color:C.whiteDim,fontFamily:"monospace"}},fmt(s.start)+" → "+fmt(s.end))),
           React.createElement("div",{style:{display:"flex",gap:5}},
             React.createElement("button",{onClick:e=>{e.stopPropagation();setEditS(s);setShowE(true);},style:{background:C.whiteFaint,border:"none",color:C.whiteDim,width:26,height:26,borderRadius:7,cursor:"pointer"}},"✏️"),
             React.createElement("button",{onClick:e=>{e.stopPropagation();del(s.id);},style:{background:C.crimson+"22",border:"none",color:C.crimsonLight,width:26,height:26,borderRadius:7,cursor:"pointer"}},"✕"))),
-        React.createElement("div",{style:{display:"flex",gap:10,marginTop:8,fontSize:10,fontFamily:"monospace",color:C.whiteDim}},
-          React.createElement("span",{style:{color:C.gold}},gs.length+" goals"),
-          React.createElement("span",null,done+"/"+tot+" tasks"),
-          isCur&&React.createElement("span",{style:{color:meta.color}},dleft(s.end)+"d left")),
+        React.createElement("div",{style:{display:"flex",gap:10,marginTop:8,fontSize:10,fontFamily:"monospace",color:C.whiteDim}},React.createElement("span",{style:{color:C.gold}},gs.length+" goals"),React.createElement("span",null,done+"/"+tot+" tasks"),isCur&&React.createElement("span",{style:{color:meta.color}},dleft(s.end)+"d left")),
         React.createElement(PBar,{pct:isCur?gsp(s):s.end<t?100:0,color:meta.color}),
-        isSel&&s.notes&&React.createElement("div",{style:{fontSize:11,color:C.whiteDim,marginTop:10,lineHeight:1.6}},s.notes));
+        isSel&&s.notes&&React.createElement("div",{style:{fontSize:11,color:C.whiteDim,marginTop:8,lineHeight:1.6}},s.notes));
     }),
     React.createElement("button",{style:{...st("gold"),width:"100%",marginTop:6},onClick:()=>{setEditS(null);setShowE(true);}},"+ New Season"),
     React.createElement(Modal,{open:showE,onClose:()=>{setShowE(false);setEditS(null);},title:editS?"Edit Season":"New Season"},
       React.createElement(SeasonEditor,{season:editS,onSave:save,onClose:()=>{setShowE(false);setEditS(null);}})));
 }
 
-// ── GOALS TAB ──
 function GoalsTab({seasons,setSeasons,selId,onXP}){
-  const[showE,setShowE]=useState(false);
-  const[editG,setEditG]=useState(null);
-  const[fc,setFc]=useState("all");
+  const[showE,setShowE]=useState(false);const[editG,setEditG]=useState(null);const[fc,setFc]=useState("all");
   const season=seasons.find(s=>s.id===selId)||gcs(seasons);
   const goals=season?season.goals||[]:[];
   const filtered=fc==="all"?goals:goals.filter(g=>g.category===fc);
@@ -530,116 +747,64 @@ function GoalsTab({seasons,setSeasons,selId,onXP}){
   const togT=(gid,tid)=>setSeasons(ss=>ss.map(s=>{if(s.id!==season?.id)return s;return{...s,goals:s.goals.map(g=>g.id!==gid?g:{...g,tasks:g.tasks.map(t=>t.id===tid?{...t,done:!t.done}:t)})};}));
   return React.createElement("div",null,
     season&&React.createElement("div",null,
-      React.createElement("div",{style:{background:`linear-gradient(135deg,${gst(season.type).color}16,transparent)`,border:`1px solid ${gst(season.type).color}44`,borderRadius:12,padding:"11px 13px",marginBottom:12}},
+      React.createElement("div",{style:{background:`linear-gradient(135deg,${gst(season.type).color}16,transparent)`,border:`1px solid ${gst(season.type).color}44`,borderRadius:12,padding:"11px 13px",marginBottom:10}},
         React.createElement("div",{style:{fontFamily:"monospace",fontSize:9,color:gst(season.type).color,letterSpacing:1.5,marginBottom:2}},"GOALS FOR"),
         React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:15,fontWeight:700,color:C.white}},season.name),
-        React.createElement("div",{style:{fontSize:9,color:C.whiteDim,fontFamily:"monospace",marginTop:1}},fmt(season.start)+" → "+fmt(season.end))),
-      React.createElement("div",{style:{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:10}},
+        React.createElement("div",{style:{fontSize:9,color:C.whiteDim,fontFamily:"monospace"}},fmt(season.start)+" → "+fmt(season.end))),
+      React.createElement("div",{style:{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:8}},
         React.createElement("div",{onClick:()=>setFc("all"),style:{flexShrink:0,padding:"4px 10px",borderRadius:14,border:`1px solid ${fc==="all"?C.gold:C.borderFaint}`,background:fc==="all"?C.goldGlow:C.whiteFaint,color:fc==="all"?C.gold:C.whiteDim,fontSize:9,fontFamily:"monospace",cursor:"pointer"}},"All"),
         CATS.map(c=>React.createElement("div",{key:c.id,onClick:()=>setFc(c.id),style:{flexShrink:0,padding:"4px 10px",borderRadius:14,border:`1px solid ${fc===c.id?c.color:C.borderFaint}`,background:fc===c.id?c.color+"22":C.whiteFaint,color:fc===c.id?c.color:C.whiteDim,fontSize:9,fontFamily:"monospace",cursor:"pointer"}},c.icon))),
-      filtered.length===0&&React.createElement("div",{style:{textAlign:"center",padding:"28px 0",color:C.whiteDim,fontSize:12,fontFamily:"monospace"}},"No goals yet."),
+      filtered.length===0&&React.createElement("div",{style:{textAlign:"center",padding:"24px 0",color:C.whiteDim,fontSize:12,fontFamily:"monospace"}},"No goals yet."),
       filtered.map(g=>React.createElement(GoalCard,{key:g.id,goal:g,onEdit:x=>{setEditG(x);setShowE(true);},onDel:delG,onToggle:togT,onXP})),
       React.createElement("button",{style:{...st("gold"),width:"100%",marginTop:4},onClick:()=>{setEditG(null);setShowE(true);}},"+ Add Goal")),
     React.createElement(Modal,{open:showE,onClose:()=>{setShowE(false);setEditG(null);},title:editG?"Edit Goal":"New Goal"},
       React.createElement(GoalEditor,{goal:editG,onSave:saveG,onClose:()=>{setShowE(false);setEditG(null);}})));
 }
 
-// ── AI PLAN TAB — with ability to add/edit goals ──
 function PlanTab({season,seasons,setSeasons,goals,onXP}){
-  const[msgs,setMsgs]=useState([{role:"assistant",text:"Palmer OS Intelligence active.\n\nI know your full rotation schedule, every season, and all your goals. I can also CREATE and EDIT goals directly from here.\n\nTry: 'Add a goal to Shore Leave II for the copywriting course' or 'What should I focus on this season?'"}]);
-  const[input,setInput]=useState("");
-  const[loading,setLoading]=useState(false);
+  const[msgs,setMsgs]=useState([{role:"assistant",text:"Palmer OS Intelligence active.\n\nI know your full plan, every season, all your goals. I can also CREATE goals directly.\n\nTry: 'Add a goal to Shore Leave II for the copywriting course' or 'What should I focus on this season?'"}]);
+  const[input,setInput]=useState("");const[loading,setLoading]=useState(false);
   const ref=useRef(null);
   useEffect(()=>{if(ref.current)ref.current.scrollIntoView({behavior:"smooth"});},[msgs]);
-
-  // Tool to add a goal to a season
-  const addGoalToSeason=(seasonName,goalData)=>{
+  const addGoal=(seasonName,goalData)=>{
     const s=seasons.find(s=>s.name.toLowerCase().includes(seasonName.toLowerCase()));
     if(!s)return"Season not found: "+seasonName;
-    const newGoal={id:uid(),title:goalData.title||"New Goal",category:goalData.category||"goals",priority:goalData.priority||"medium",status:"pending",notes:goalData.notes||"",tasks:(goalData.tasks||[]).map(t=>({id:uid(),text:t,done:false}))};
-    setSeasons(ss=>ss.map(sx=>sx.id===s.id?{...sx,goals:[...sx.goals,newGoal]}:sx));
+    const ng={id:uid(),title:goalData.title||"New Goal",category:goalData.category||"goals",priority:goalData.priority||"medium",status:"pending",notes:goalData.notes||"",tasks:(goalData.tasks||[]).map(t=>({id:uid(),text:t,done:false}))};
+    setSeasons(ss=>ss.map(sx=>sx.id===s.id?{...sx,goals:[...sx.goals,ng]}:sx));
     onXP(10,"Goal added to "+s.name+"!");
-    return"Added '"+newGoal.title+"' to "+s.name;
+    return"Added '"+ng.title+"' to "+s.name;
   };
-
   const send=async()=>{
     const q=input.trim();if(!q||loading)return;
     setInput("");setMsgs(m=>[...m,{role:"user",text:q}]);setLoading(true);
-
-    const seasonsContext=seasons.map(s=>{
-      const gs=s.goals||[];
-      return s.name+" ("+s.type+", "+s.start+" to "+s.end+"): "+gs.length+" goals ["+gs.map(g=>g.title+"("+g.category+","+g.priority+")").join("; ")+"]";
-    }).join("\n");
-
-    const sys=`You are the planning intelligence for Garry Palmer's Palmer OS life dashboard. You can both advise AND create goals directly in the app.
-
-GARRY'S CONTEXT:
-- Chief Mate Unlimited, DPO Unlimited, offshore DP supply vessels, Edison Chouest Offshore, Guyana, 28/28 rotation
-- LMA Diploma in Ship Management enrolled (May 2026)
-- Target roles: Marine Superintendent, DPA, Internal Auditor
-
-THREE PILLARS:
-1. INNER CURRICULUM: AMORC rejoined (going all the way), brahmacharya 90 days, ayahuasca ceremony, father reckoning, vision quest, real teacher, the two letters (to/from 60yr self), naming the thing he fears to want
-2. MONTHLY GOALS: consultancy setup, podcast, LinkedIn branding, iTalki language (Mandarin/Spanish), ISM auditor, reading stack, video editing, copywriting
-3. THE BOOK: Ravenborn Chronicles - fantasy novel, story bible complete, prose not started. 1x session offshore, 3x sessions home.
-
-ROTATION SEASONS:
-${seasonsContext}
-
-CURRENT SEASON: ${season?season.name+" ("+season.type+", "+season.start+" to "+season.end+")":"none"}
-
-CAPABILITY: You can create goals. When the user asks you to add or create a goal, respond with a JSON block in this exact format at the END of your response:
-
-ACTION:ADD_GOAL
-{
-  "season": "Shore Leave II",
-  "goal": {
-    "title": "Goal title here",
-    "category": "inner|goals|book|career|health|spirit|daily|creative|custom",
-    "priority": "critical|high|medium|low",
-    "notes": "Brief description",
-    "tasks": ["Task 1", "Task 2", "Task 3"]
-  }
-}
-
-Only include the ACTION block when creating a goal. Otherwise just advise. Be direct, specific, grounded. No generic advice. Concise for mobile.`;
-
+    const sc=seasons.map(s=>s.name+" ("+s.type+","+s.start+"→"+s.end+"): "+s.goals.map(g=>g.title).join("; ")).join("\n");
+    const sys="You are the planning intelligence for Garry Palmer's Palmer OS.\n\nGarry: Chief Mate Unlimited, DPO Unlimited, offshore DP supply vessels, Edison Chouest Offshore, Guyana, 28/28 rotation. LMA Diploma in Ship Management. Target: Marine Superintendent, DPA, Internal Auditor.\n\nTHREE PILLARS:\n1. INNER: AMORC (rejoining), brahmacharya 90d, ayahuasca, father reckoning, vision quest, real teacher, two letters, naming the thing he fears to want\n2. GOALS: consultancy, podcast, LinkedIn, iTalki language, ISM auditor, reading stack, video editing, copywriting\n3. BOOK: Ravenborn Chronicles, story bible complete, prose not started. 1x offshore, 3x home.\n\nSEASONS:\n"+sc+"\n\nCURRENT: "+(season?season.name+" ("+season.type+")":"none")+"\n\nYou can create goals. When user asks to add/create a goal, include at the END of your response:\n\nACTION:ADD_GOAL\n{\"season\":\"Shore Leave II\",\"goal\":{\"title\":\"Goal title\",\"category\":\"inner|goals|book|career|health|spirit|daily|creative|custom\",\"priority\":\"critical|high|medium|low\",\"notes\":\"Brief description\",\"tasks\":[\"Task 1\",\"Task 2\"]}}\n\nBe direct, specific, grounded. No generic advice. Concise for mobile.";
     try{
       const history=msgs.slice(-6).map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}));
       const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,system:sys,messages:[...history,{role:"user",content:q}]})});
       const data=await res.json();
       const text=data.content&&data.content[0]?data.content[0].text:"Try again.";
-      
-      // Check for ACTION block
       if(text.includes("ACTION:ADD_GOAL")){
         try{
-          const jsonStart=text.indexOf("{",text.indexOf("ACTION:ADD_GOAL"));
-          const jsonEnd=text.lastIndexOf("}")+1;
-          const parsed=JSON.parse(text.slice(jsonStart,jsonEnd));
-          const result=addGoalToSeason(parsed.season,parsed.goal);
-          const cleanText=text.slice(0,text.indexOf("ACTION:ADD_GOAL")).trim();
-          setMsgs(m=>[...m,{role:"assistant",text:cleanText+"\n\n✅ "+result}]);
-        }catch(e){
-          setMsgs(m=>[...m,{role:"assistant",text:text}]);
-        }
-      }else{
-        setMsgs(m=>[...m,{role:"assistant",text:text}]);
-      }
-    }catch(e){setMsgs(m=>[...m,{role:"assistant",text:"Connection issue. Check internet."}]);}
+          const js=text.indexOf("{",text.indexOf("ACTION:ADD_GOAL"));
+          const je=text.lastIndexOf("}")+1;
+          const p=JSON.parse(text.slice(js,je));
+          const result=addGoal(p.season,p.goal);
+          setMsgs(m=>[...m,{role:"assistant",text:text.slice(0,text.indexOf("ACTION:ADD_GOAL")).trim()+"\n\n✅ "+result}]);
+        }catch{setMsgs(m=>[...m,{role:"assistant",text}]);}
+      }else{setMsgs(m=>[...m,{role:"assistant",text}]);}
+    }catch{setMsgs(m=>[...m,{role:"assistant",text:"Connection issue."}]);}
     setLoading(false);
   };
-
-  const suggs=["Add a goal to Shore Leave I for the consultancy","What should I focus on Deep Water I?","Plan Shore Leave II week by week","Add a writing milestone to Shore Leave III"];
-
+  const suggs=["What should I focus on this season?","Add a goal for the copywriting course to Shore Leave IV","Plan Shore Leave I week by week","How do I balance the book offshore?"];
   return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"calc(100vh - 220px)"}},
     React.createElement("div",{style:{flex:1,overflowY:"auto",paddingBottom:8}},
       msgs.map((m,i)=>React.createElement("div",{key:i,style:{marginBottom:10,display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}},
         React.createElement("div",{style:{maxWidth:"87%",padding:"10px 13px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.role==="user"?C.gold:C.card2,color:m.role==="user"?C.navy:C.white,fontSize:12,lineHeight:1.65,border:m.role==="assistant"?`1px solid ${C.borderFaint}`:"none",whiteSpace:"pre-wrap"}},m.text))),
       loading&&React.createElement("div",{style:{display:"flex",gap:4,padding:"12px 13px",background:C.card2,borderRadius:"16px 16px 16px 4px",width:60,border:`1px solid ${C.borderFaint}`}},
         [0,1,2].map(i=>React.createElement("div",{key:i,style:{width:6,height:6,borderRadius:"50%",background:C.gold,animation:`pulse 1.2s ${i*0.2}s infinite`}}))),
-      React.createElement("div",{ref:ref})),
-    msgs.length===1&&React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}},
-      suggs.map((s,i)=>React.createElement("div",{key:i,onClick:()=>setInput(s),style:{padding:"5px 10px",borderRadius:14,border:`1px solid ${C.border}`,background:C.whiteFaint,color:C.whiteDim,fontSize:10,cursor:"pointer",fontFamily:"monospace"}},s))),
+      React.createElement("div",{ref})),
+    msgs.length===1&&React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}},suggs.map((s,i)=>React.createElement("div",{key:i,onClick:()=>setInput(s),style:{padding:"5px 10px",borderRadius:14,border:`1px solid ${C.border}`,background:C.whiteFaint,color:C.whiteDim,fontSize:10,cursor:"pointer",fontFamily:"monospace"}},s))),
     React.createElement("div",{style:{display:"flex",gap:8}},
       React.createElement("input",{style:{...inp,flex:1},value:input,onChange:e=>setInput(e.target.value),onKeyDown:e=>e.key==="Enter"&&send(),placeholder:"Ask or say 'Add a goal to...'"}),
       React.createElement("button",{style:{...st("gold"),padding:"10px 14px"},onClick:send,disabled:loading},"→")));
@@ -648,37 +813,37 @@ Only include the ACTION block when creating a goal. Otherwise just advise. Be di
 // ── MAIN APP ──
 function App(){
   const[tab,setTab]=useState("today");
-  const[seasons,setSeasons]=useStore("po_v3_seasons",DS);
-  const[selId,setSelId]=useStore("po_v3_sel",null);
-  const[xp,setXp]=useStore("po_v3_xp",0);
-  const[reminders,setReminders]=useStore("po_v3_reminders",[]);
+  const[seasons,setSeasons]=useStore("po_v4_seasons",DS);
+  const[selId,setSelId]=useStore("po_v4_sel",null);
+  const[xp,setXp]=useStore("po_v4_xp",0);
+  const[brahmaStart,setBrahmaStart]=useStore("po_v4_brahma",null);
+  const[wordLog,setWordLog]=useStore("po_v4_words",{});
+  const[checkinData,setCheckinData]=useStore("po_v4_checkin",{});
+  const[contacts,setContacts]=useStore("po_v4_contacts",null);
+  const[books,setBooks]=useStore("po_v4_books",null);
+  const[visionNotes,setVisionNotes]=useStore("po_v4_vision","");
+  const[seasonNotes,setSeasonNotes]=useStore("po_v4_snotes",{});
   const[toast,setToast]=useState(null);
 
   const curSeason=gcs(seasons);
   const viewSeason=seasons.find(s=>s.id===selId)||curSeason;
 
   const addXP=useCallback((amount,msg)=>{
-    setXp(x=>{
-      const nx=x+amount;
-      if(glv(nx).level>glv(x).level)setTimeout(()=>setToast("LEVEL UP! "+glv(nx).icon+" "+glv(nx).title),400);
-      return nx;
-    });
+    setXp(x=>{const nx=x+amount;if(glv(nx).level>glv(x).level)setTimeout(()=>setToast("LEVEL UP! "+glv(nx).icon+" "+glv(nx).title),400);return nx;});
     setToast(msg);
   },[]);
 
   const TABS=[
     {id:"today",icon:"🌅",label:"Today"},
-    {id:"overview",icon:"🧭",label:"Overview"},
+    {id:"cal",icon:"📅",label:"Calendar"},
     {id:"seasons",icon:"🌊",label:"Seasons"},
     {id:"goals",icon:"⚓",label:"Goals"},
+    {id:"more",icon:"🔮",label:"More"},
     {id:"plan",icon:"✨",label:"Plan"},
   ];
-
   const cur=glv(xp);
-
   return React.createElement("div",{style:{background:C.navy,minHeight:"100vh",fontFamily:"Inter,sans-serif",color:C.white,paddingBottom:85,overflowX:"hidden"}},
     toast&&React.createElement(Toast,{msg:toast,onDone:()=>setToast(null)}),
-    // Header
     React.createElement("div",{style:{background:`linear-gradient(180deg,#080C18 0%,${C.midnight} 100%)`,borderBottom:`1px solid ${C.border}`,padding:"13px 14px 0",position:"sticky",top:0,zIndex:100}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}},
         React.createElement("div",null,
@@ -689,39 +854,31 @@ function App(){
             React.createElement("div",{style:{fontFamily:"Georgia,serif",fontSize:13,fontWeight:700,color:C.gold}},cur.icon+" Lv."+cur.level),
             React.createElement("div",{style:{fontSize:9,color:C.whiteDim,fontFamily:"monospace"}},xp.toLocaleString()+" XP")),
           React.createElement(Compass,null))),
-      // Season chips
       React.createElement("div",{style:{display:"flex",gap:5,overflowX:"auto",paddingBottom:10}},
         seasons.slice(0,8).map(s=>{
           const meta=gst(s.type),t=td(),isCur=s.start<=t&&s.end>t,isSel=s.id===selId;
           return React.createElement("div",{key:s.id,onClick:()=>setSelId(s.id===selId?null:s.id),style:{flexShrink:0,display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:16,border:`1px solid ${isSel||isCur?meta.color:C.borderFaint}`,background:isSel||isCur?meta.color+"22":C.whiteFaint,color:isSel||isCur?meta.color:C.whiteDim,fontSize:9,fontFamily:"monospace",cursor:"pointer"}},
-            React.createElement("span",{style:{width:5,height:5,borderRadius:"50%",background:"currentColor",display:"inline-block"}}),
-            s.name);
+            React.createElement("span",{style:{width:5,height:5,borderRadius:"50%",background:"currentColor",display:"inline-block"}}),s.name);
         })),
-      // Nav
       React.createElement("div",{style:{display:"flex"}},
-        TABS.map(t=>React.createElement("button",{key:t.id,onClick:()=>setTab(t.id),style:{flex:1,padding:"8px 2px",background:"none",border:"none",color:tab===t.id?C.gold:C.whiteDim,fontSize:8,fontFamily:"monospace",letterSpacing:1,textTransform:"uppercase",cursor:"pointer",borderBottom:`2px solid ${tab===t.id?C.gold:"transparent"}`,transition:"all 0.2s"}},t.label)))),
-    // Content
+        TABS.map(t=>React.createElement("button",{key:t.id,onClick:()=>setTab(t.id),style:{flex:1,padding:"8px 1px",background:"none",border:"none",color:tab===t.id?C.gold:C.whiteDim,fontSize:7.5,fontFamily:"monospace",letterSpacing:0.8,textTransform:"uppercase",cursor:"pointer",borderBottom:`2px solid ${tab===t.id?C.gold:"transparent"}`,transition:"all 0.2s"}},t.label)))),
     React.createElement("div",{style:{padding:"14px 13px",maxWidth:480,margin:"0 auto"}},
-      tab==="today"&&React.createElement(DailyTab,{seasons,setSeasons,xp,onXP:addXP}),
-      tab==="overview"&&React.createElement(OverviewTab,{seasons,season:viewSeason,xp,onXP:addXP}),
+      tab==="today"&&React.createElement(TodayTab,{seasons,setSeasons,xp,onXP:addXP,brahmaStart,setBrahmaStart,wordLog,setWordLog,checkinData,setCheckinData}),
+      tab==="cal"&&React.createElement(CalendarTab,{checkinData:checkinData||{},wordLog:wordLog||{}}),
       tab==="seasons"&&React.createElement(SeasonsTab,{seasons,setSeasons,selId,setSelId}),
       tab==="goals"&&React.createElement(GoalsTab,{seasons,setSeasons,selId:selId||curSeason?.id,onXP:addXP}),
+      tab==="more"&&React.createElement(MoreTab,{seasons,setSeasons,contacts,setContacts,books,setBooks,visionNotes,setVisionNotes,seasonNotes,setSeasonNotes}),
       tab==="plan"&&React.createElement(PlanTab,{season:viewSeason,seasons,setSeasons,goals:viewSeason?viewSeason.goals||[]:[],onXP:addXP})),
-    // Bottom nav
     React.createElement("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"rgba(10,15,30,0.97)",backdropFilter:"blur(20px)",borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:200}},
       TABS.map(t=>React.createElement("button",{key:t.id,onClick:()=>setTab(t.id),style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:6,background:"none",border:"none",cursor:"pointer",color:tab===t.id?C.gold:C.whiteDim}},
-        React.createElement("span",{style:{fontSize:19,filter:tab===t.id?"drop-shadow(0 0 5px "+C.gold+")":"none"}},t.icon),
+        React.createElement("span",{style:{fontSize:18,filter:tab===t.id?"drop-shadow(0 0 5px "+C.gold+")":"none"}},t.icon),
         React.createElement("span",{style:{fontSize:7,fontFamily:"monospace",letterSpacing:0.8,textTransform:"uppercase"}},t.label)))));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App,null));
 </script>
 <script>
-if('serviceWorker'in navigator){
-  window.addEventListener('load',function(){
-    navigator.serviceWorker.register('/Palmer-OS/sw.js').catch(function(){});
-  });
-}
+if('serviceWorker'in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/Palmer-OS/sw.js').catch(function(){});});}
 </script>
 </body>
 </html>
